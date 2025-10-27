@@ -186,43 +186,56 @@ class Watchtower_Manager_Health_Storage {
                 'success' => false,
                 'error' => 'Invalid response from agent',
             );
-        } else {
-            // Update agent info with site name, admin URL, and site icon from health data
-            $needs_update = false;
-            $update_data = array('site_url' => $site_url);
+            return $this->save_health_data($site_url, $health_data);
+        }
 
-            // Get current agent data to check if anything changed
-            $agent_storage = new Watchtower_Manager_Agent_Storage();
-            $current_agent = $agent_storage->get_agent_by_url($site_url);
+        // Split data into static (info) and dynamic (health) components
+        $agent_storage = new Watchtower_Manager_Agent_Storage();
+        $current_agent = $agent_storage->get_agent_by_url($site_url);
 
-            if (isset($health_data['wordpress']['site_name'])) {
-                if (!isset($current_agent['site_name']) || $current_agent['site_name'] !== $health_data['wordpress']['site_name']) {
-                    $update_data['site_name'] = $health_data['wordpress']['site_name'];
-                    $needs_update = true;
-                }
-            }
+        // Extract static configuration data for info.json
+        $static_data = array();
+        $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
 
-            if (isset($health_data['wordpress']['admin_url'])) {
-                if (!isset($current_agent['admin_url']) || $current_agent['admin_url'] !== $health_data['wordpress']['admin_url']) {
-                    $update_data['admin_url'] = $health_data['wordpress']['admin_url'];
-                    $needs_update = true;
-                }
-            }
-
-            if (isset($health_data['wordpress']['site_icon'])) {
-                if (!isset($current_agent['site_icon']) || $current_agent['site_icon'] !== $health_data['wordpress']['site_icon']) {
-                    $update_data['site_icon'] = $health_data['wordpress']['site_icon'];
-                    $needs_update = true;
-                }
-            }
-
-            // Only save if something actually changed
-            if ($needs_update) {
-                $agent_storage->save_agent($update_data);
+        foreach ($static_keys as $key) {
+            if (isset($health_data[$key])) {
+                $static_data[$key] = $health_data[$key];
             }
         }
 
-        return $this->save_health_data($site_url, $health_data);
+        // Update agent info with static configuration data
+        if (!empty($static_data)) {
+            $update_data = array_merge(array('site_url' => $site_url), $static_data);
+
+            // Also save site_name, admin_url, and site_icon to top level for easy access
+            if (isset($static_data['wordpress']['site_name'])) {
+                $update_data['site_name'] = $static_data['wordpress']['site_name'];
+            }
+            if (isset($static_data['wordpress']['admin_url'])) {
+                $update_data['admin_url'] = $static_data['wordpress']['admin_url'];
+            }
+            if (isset($static_data['wordpress']['site_icon'])) {
+                $update_data['site_icon'] = $static_data['wordpress']['site_icon'];
+            }
+
+            $agent_storage->save_agent($update_data);
+        }
+
+        // Extract dynamic monitoring data for health.json
+        $dynamic_data = array(
+            'success' => true,
+            'timestamp' => $health_data['timestamp'] ?? current_time('mysql'),
+        );
+
+        $dynamic_keys = array('cpu', 'memory', 'disk', 'uptime');
+
+        foreach ($dynamic_keys as $key) {
+            if (isset($health_data[$key])) {
+                $dynamic_data[$key] = $health_data[$key];
+            }
+        }
+
+        return $this->save_health_data($site_url, $dynamic_data);
     }
 
     /**
