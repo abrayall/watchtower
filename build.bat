@@ -27,26 +27,21 @@ for /f "delims=" %%i in ('git describe --tags --match "v*.*.*" 2^>nul') do set G
 if not defined GIT_DESCRIBE set GIT_DESCRIBE=v0.0.1
 
 REM Parse git describe output (v0.0.1 or v0.0.1-5-g1a2b3c4)
-set "GIT_TAG=%GIT_DESCRIBE%"
-
 REM Check if there are commits after the tag (contains hyphen after version)
 echo %GIT_DESCRIBE% | findstr /R "v[0-9]*\.[0-9]*\.[0-9]*-[0-9]*-g" >nul
 if %ERRORLEVEL% EQU 0 (
     REM Format: v0.0.1-5-g1a2b3c4
-    REM Extract version and hash
+    REM Extract base version and commit count
     for /f "tokens=1,2 delims=-" %%a in ("%GIT_DESCRIBE:v=%") do (
         set "BASE_VERSION=%%a"
-        set "REST=%%b"
+        set "COMMIT_COUNT=%%b"
     )
-
-    REM Get the commit hash (after the last 'g')
-    for /f "tokens=2 delims=g" %%a in ("!REST!") do set "COMMIT_HASH=%%a"
 
     REM Parse base version
     for /f "tokens=1,2,3 delims=." %%a in ("!BASE_VERSION!") do (
         set MAJOR=%%a
         set MINOR=%%b
-        set MAINTENANCE=%%c-!COMMIT_HASH!
+        set MAINTENANCE=%%c-!COMMIT_COUNT!
     )
     set "VERSION=!MAJOR!.!MINOR!.!MAINTENANCE!"
 ) else (
@@ -59,6 +54,26 @@ if %ERRORLEVEL% EQU 0 (
         set MINOR=%%b
         set MAINTENANCE=%%c
     )
+)
+
+REM Check for uncommitted local changes
+git status --porcelain 2>nul | findstr /R ".*" >nul
+if %ERRORLEVEL% EQU 0 (
+    echo Detected uncommitted changes, appending timestamp
+    for /f "tokens=1-4 delims=/:. " %%a in ("%DATE% %TIME%") do (
+        set "MONTH=%%b"
+        set "DAY=%%c"
+        set "HOUR=%%d"
+        set "MINUTE=%%e"
+    )
+    REM Pad single digits with zero
+    if "!MONTH:~1!"=="" set "MONTH=0!MONTH!"
+    if "!DAY:~1!"=="" set "DAY=0!DAY!"
+    if "!HOUR:~1!"=="" set "HOUR=0!HOUR!"
+    if "!MINUTE:~1!"=="" set "MINUTE=0!MINUTE!"
+    set "TIMESTAMP=!MONTH!!DAY!!HOUR!!MINUTE!"
+    set "MAINTENANCE=!MAINTENANCE!-!TIMESTAMP!"
+    set "VERSION=!MAJOR!.!MINOR!.!MAINTENANCE!"
 )
 
 REM Generate version.properties in build directory

@@ -38,24 +38,28 @@ if [[ "$GIT_DESCRIBE" =~ ^v([0-9]+)\.([0-9]+)\.([0-9]+)(-([0-9]+)-g([0-9a-f]+))?
     MINOR="${BASH_REMATCH[2]}"
     MAINTENANCE="${BASH_REMATCH[3]}"
     COMMIT_COUNT="${BASH_REMATCH[5]}"
-    COMMIT_HASH="${BASH_REMATCH[6]}"
 
-    # If there are commits after the tag, append hash to maintenance
-    if [[ -n "$COMMIT_HASH" ]]; then
-        MAINTENANCE="${MAINTENANCE}-${COMMIT_HASH}"
-        GIT_TAG="${MAJOR}.${MINOR}.${MAINTENANCE%%-*}"
+    # If there are commits after the tag, append commit count to maintenance
+    if [[ -n "$COMMIT_COUNT" ]]; then
+        MAINTENANCE="${MAINTENANCE}-${COMMIT_COUNT}"
         VERSION="${MAJOR}.${MINOR}.${MAINTENANCE}"
     else
-        GIT_TAG="${GIT_DESCRIBE#v}"
-        VERSION="$GIT_TAG"
+        VERSION="${MAJOR}.${MINOR}.${MAINTENANCE}"
     fi
 else
     # Fallback
     MAJOR=0
     MINOR=0
     MAINTENANCE=1
-    GIT_TAG="0.0.1"
     VERSION="0.0.1"
+fi
+
+# Check for uncommitted local changes
+if [[ -n $(git status --porcelain 2>/dev/null) ]]; then
+    TIMESTAMP=$(date +"%m%d%H%M")
+    MAINTENANCE="${MAINTENANCE}-${TIMESTAMP}"
+    VERSION="${MAJOR}.${MINOR}.${MAINTENANCE}"
+    echo -e "${BLUE}Detected uncommitted changes, appending timestamp${NC}"
 fi
 
 # Generate version.properties in build directory
