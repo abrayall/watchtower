@@ -375,9 +375,18 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 - **Latest Tag**: `v0.0.1`
 - **Remote**: `origin`
 
-## Notes
+## Development Guidelines
 
-- Do NOT commit to git automatically - always ask first
+### Git Commit Messages
+- **Do NOT commit automatically** - always ask first
+- **Keep commits to one-line summaries** - no multi-line bullet lists
+- **Do NOT include "Claude" or "Claude Code" in commit messages**
+- Examples of good commit messages:
+  - `Add manual agent update button to site details page`
+  - `Update plugin author to abrayall`
+  - `Add custom admin URL support and configuration notice`
+
+### Code Standards
 - The `build/` directory is in `.gitignore`
 - Root `version.properties` was removed - now generated during build
 - Manager plugin data directory (`remote-manager/data/sites/`) is in `.gitignore`
