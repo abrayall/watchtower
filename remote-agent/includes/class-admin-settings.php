@@ -22,6 +22,9 @@ class Watchtower_Agent_Admin_Settings {
         // Handle manual registration
         add_action('admin_post_watchtower_agent_register', array($this, 'handle_manual_registration'));
 
+        // Handle quick registration from admin notice
+        add_action('admin_post_watchtower_agent_quick_register', array($this, 'handle_quick_registration'));
+
         // Show admin notice if manager URL not configured
         add_action('admin_notices', array($this, 'show_configuration_notice'));
     }
@@ -30,6 +33,30 @@ class Watchtower_Agent_Admin_Settings {
      * Show admin notice if manager URL is not configured
      */
     public function show_configuration_notice() {
+        // Check if user can manage options
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        // Show success/error messages from registration
+        if (isset($_GET['registration'])) {
+            if ($_GET['registration'] === 'success') {
+                ?>
+                <div class="notice notice-success is-dismissible">
+                    <p><strong>Success!</strong> Agent registered with manager successfully.</p>
+                </div>
+                <?php
+                return;
+            } elseif ($_GET['registration'] === 'error') {
+                $message = isset($_GET['message']) ? urldecode($_GET['message']) : 'Unknown error';
+                ?>
+                <div class="notice notice-error is-dismissible">
+                    <p><strong>Error!</strong> Registration failed: <?php echo esc_html($message); ?></p>
+                </div>
+                <?php
+            }
+        }
+
         // Don't show on the settings page itself
         $screen = get_current_screen();
         if ($screen && $screen->id === 'settings_page_watchtower-agent') {
@@ -48,20 +75,24 @@ class Watchtower_Agent_Admin_Settings {
             return;
         }
 
-        // Check if user can manage options
-        if (!current_user_can('manage_options')) {
-            return;
-        }
-
-        // Show the notice
-        $settings_url = admin_url('options-general.php?page=watchtower-agent');
+        // Show the notice with inline configuration form
         ?>
-        <div class="notice notice-warning is-dismissible">
-            <p>
+        <div class="notice notice-warning is-dismissible" style="padding: 15px;">
+            <p style="margin: 0 0 10px 0;">
                 <strong>Watchtower Agent:</strong>
                 Remote manager URL has not been configured.
-                <a href="<?php echo esc_url($settings_url); ?>">Configure now</a>
             </p>
+            <form method="post" action="<?php echo admin_url('admin-post.php'); ?>" style="display: flex; align-items: center; gap: 10px; max-width: 600px;">
+                <input type="hidden" name="action" value="watchtower_agent_quick_register">
+                <?php wp_nonce_field('watchtower_agent_quick_register', 'watchtower_agent_nonce'); ?>
+                <input type="text"
+                       name="manager_url"
+                       placeholder="https://manager.example.com"
+                       required
+                       style="flex: 1; padding: 6px 12px;"
+                       title="Enter the full URL of your manager site (e.g., https://manager.example.com or http://wordpress_site)">
+                <button type="submit" class="button button-primary">Register</button>
+            </form>
         </div>
         <?php
     }
@@ -358,6 +389,102 @@ class Watchtower_Agent_Admin_Settings {
                 'registration' => 'error',
                 'message' => urlencode($result)
             ), admin_url('options-general.php')));
+        }
+        exit;
+    }
+
+    /**
+     * Handle quick registration from admin notice
+     */
+    public function handle_quick_registration() {
+        // Check nonce
+        if (!isset($_POST['watchtower_agent_nonce']) || !wp_verify_nonce($_POST['watchtower_agent_nonce'], 'watchtower_agent_quick_register')) {
+            wp_die('Security check failed');
+        }
+
+        // Check permissions
+        if (!current_user_can('manage_options')) {
+            wp_die('You do not have permission to perform this action');
+        }
+
+        // Get manager URL (don't save yet - only save after successful registration)
+        $manager_url = esc_url_raw($_POST['manager_url']);
+
+        // Get admin user and create application password
+        $admin_users = get_users(array(
+            'role' => 'administrator',
+            'number' => 1,
+            'orderby' => 'ID',
+            'order' => 'ASC'
+        ));
+
+        if (empty($admin_users)) {
+            wp_redirect(add_query_arg(array(
+                'registration' => 'error',
+                'message' => urlencode('No administrator user found')
+            ), admin_url()));
+            exit;
+        }
+
+        $admin_user = $admin_users[0];
+
+        // Check transient for existing password
+        $password_data = get_transient('watchtower_agent_app_password');
+        $password = $password_data ? $password_data['password'] : null;
+
+        if (!$password) {
+            // Create new application password
+            $result = WP_Application_Passwords::create_new_application_password($admin_user->ID, array(
+                'name' => 'watchtower-agent'
+            ));
+
+            if (is_wp_error($result)) {
+                wp_redirect(add_query_arg(array(
+                    'registration' => 'error',
+                    'message' => urlencode($result->get_error_message())
+                ), admin_url()));
+                exit;
+            }
+
+            list($password, $password_info) = $result;
+
+            // Store in transient
+            set_transient('watchtower_agent_app_password', array(
+                'username' => $admin_user->user_login,
+                'password' => $password,
+                'created' => current_time('mysql')
+            ), 600);
+        }
+
+        // Temporarily set manager URL for registration attempt
+        $previous_url = get_option('watchtower_agent_manager_url', '');
+        update_option('watchtower_agent_manager_url', $manager_url);
+
+        // Attempt registration
+        $result = watchtower_agent_register_with_manager($admin_user->user_login, $password);
+
+        if ($result === true) {
+            // Registration successful - keep the manager URL
+            update_option('watchtower_agent_last_registration', current_time('mysql'));
+            update_option('watchtower_agent_registration_status', 'Successfully registered');
+
+            wp_redirect(add_query_arg(array(
+                'registration' => 'success'
+            ), admin_url()));
+        } else {
+            // Registration failed - restore previous URL (or remove if there wasn't one)
+            if ($previous_url) {
+                update_option('watchtower_agent_manager_url', $previous_url);
+            } else {
+                delete_option('watchtower_agent_manager_url');
+            }
+
+            update_option('watchtower_agent_registration_status', 'Registration failed: ' . $result);
+
+            wp_redirect(add_query_arg(array(
+                'registration' => 'error',
+                'message' => urlencode($result)
+            ), admin_url()));
         }
         exit;
     }

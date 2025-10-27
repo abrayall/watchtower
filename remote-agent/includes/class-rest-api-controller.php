@@ -60,19 +60,115 @@ class Watchtower_Agent_REST_Controller {
     }
 
     /**
-     * Get plugin info
+     * Get plugin info (static configuration data)
      */
     public function get_info($request) {
+        // PHP Information
+        $php_info = array(
+            'version' => PHP_VERSION,
+            'memory_limit' => ini_get('memory_limit'),
+            'max_execution_time' => ini_get('max_execution_time'),
+            'upload_max_filesize' => ini_get('upload_max_filesize'),
+            'post_max_size' => ini_get('post_max_size'),
+            'extensions' => get_loaded_extensions(),
+        );
+
+        // WordPress Information
+        $site_icon_url = get_site_icon_url();
+        $wordpress_info = array(
+            'version' => get_bloginfo('version'),
+            'site_url' => get_site_url(),
+            'home_url' => get_home_url(),
+            'site_name' => get_bloginfo('name'),
+            'site_icon' => $site_icon_url ? $site_icon_url : null,
+            'admin_url' => get_admin_url(),
+            'admin_email' => get_option('admin_email'),
+            'language' => get_locale(),
+            'timezone' => get_option('timezone_string') ?: 'UTC',
+            'debug_mode' => WP_DEBUG,
+            'multisite' => is_multisite(),
+        );
+
+        // Database Information
+        global $wpdb;
+        $db_info = array(
+            'database_name' => DB_NAME,
+            'database_host' => DB_HOST,
+            'database_charset' => DB_CHARSET,
+            'database_collate' => DB_COLLATE,
+            'table_prefix' => $wpdb->prefix,
+            'database_version' => $wpdb->db_version(),
+        );
+
+        // Get database size
+        $db_size_query = $wpdb->get_var("
+            SELECT SUM(data_length + index_length)
+            FROM information_schema.TABLES
+            WHERE table_schema = '" . DB_NAME . "'
+        ");
+        if ($db_size_query) {
+            $db_info['database_size'] = round($db_size_query / 1024 / 1024, 2) . ' MB';
+            $db_info['database_size_bytes'] = $db_size_query;
+        }
+
+        // Server Information
+        $server_info = array(
+            'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
+            'protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'Unknown',
+            'server_name' => $_SERVER['SERVER_NAME'] ?? 'Unknown',
+            'server_ip' => $_SERVER['SERVER_ADDR'] ?? 'Unknown',
+            'document_root' => $_SERVER['DOCUMENT_ROOT'] ?? 'Unknown',
+            'https' => is_ssl(),
+        );
+
+        // Active Plugins
+        $active_plugins = get_option('active_plugins', array());
+        $plugins_info = array(
+            'active_count' => count($active_plugins),
+            'active_plugins' => array(),
+        );
+
+        foreach ($active_plugins as $plugin_file) {
+            $plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin_file, false, false);
+            $plugins_info['active_plugins'][] = array(
+                'name' => $plugin_data['Name'],
+                'version' => $plugin_data['Version'],
+                'file' => $plugin_file,
+            );
+        }
+
+        // Active Theme
+        $theme = wp_get_theme();
+        $theme_info = array(
+            'name' => $theme->get('Name'),
+            'version' => $theme->get('Version'),
+            'template' => $theme->get_template(),
+            'stylesheet' => $theme->get_stylesheet(),
+        );
+
+        // WordPress Constants
+        $wp_constants = array(
+            'WP_DEBUG' => defined('WP_DEBUG') ? WP_DEBUG : false,
+            'WP_DEBUG_LOG' => defined('WP_DEBUG_LOG') ? WP_DEBUG_LOG : false,
+            'WP_DEBUG_DISPLAY' => defined('WP_DEBUG_DISPLAY') ? WP_DEBUG_DISPLAY : false,
+            'SCRIPT_DEBUG' => defined('SCRIPT_DEBUG') ? SCRIPT_DEBUG : false,
+            'WP_CACHE' => defined('WP_CACHE') ? WP_CACHE : false,
+            'CONCATENATE_SCRIPTS' => defined('CONCATENATE_SCRIPTS') ? CONCATENATE_SCRIPTS : true,
+            'COMPRESS_SCRIPTS' => defined('COMPRESS_SCRIPTS') ? COMPRESS_SCRIPTS : true,
+            'COMPRESS_CSS' => defined('COMPRESS_CSS') ? COMPRESS_CSS : true,
+        );
+
         return new WP_REST_Response(array(
             'success' => true,
             'version' => WATCHTOWER_AGENT_VERSION,
-            'wordpress_version' => get_bloginfo('version'),
-            'php_version' => PHP_VERSION,
-            'site_url' => get_site_url(),
-            'admin_url' => get_admin_url(),
-            'admin_email' => get_option('admin_email'),
-            'updraftplus_installed' => class_exists('UpdraftPlus'),
             'timestamp' => current_time('mysql'),
+            'php' => $php_info,
+            'wordpress' => $wordpress_info,
+            'database' => $db_info,
+            'server' => $server_info,
+            'plugins' => $plugins_info,
+            'theme' => $theme_info,
+            'constants' => $wp_constants,
         ), 200);
     }
 
