@@ -97,6 +97,9 @@ cd "$BUILD_DIR"
 zip -r "watchtower-agent-${VERSION}.zip" remote-agent/ -q
 echo -e "${GREEN}✓ Created: watchtower-agent-${VERSION}.zip${NC}"
 
+# Store agent ZIP for bundling with manager
+AGENT_ZIP="watchtower-agent-${VERSION}.zip"
+
 # Build Manager Plugin
 echo ""
 echo -e "${BLUE}Building Watchtower Manager plugin...${NC}"
@@ -106,6 +109,11 @@ mkdir -p "$MANAGER_DIR"
 # Copy manager files
 cp -r "$SCRIPT_DIR/remote-manager/"* "$MANAGER_DIR/"
 cp "$VERSION_FILE" "$MANAGER_DIR/"
+
+# Create assets directory and bundle agent plugin
+mkdir -p "$MANAGER_DIR/assets"
+cp "$AGENT_ZIP" "$MANAGER_DIR/assets/"
+echo -e "${BLUE}Bundled agent plugin: $AGENT_ZIP${NC}"
 
 # Remove development files
 find "$MANAGER_DIR" -name ".DS_Store" -delete

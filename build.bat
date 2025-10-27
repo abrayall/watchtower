@@ -111,6 +111,9 @@ cd /d "%BUILD_DIR%"
 powershell -Command "Compress-Archive -Path 'remote-agent' -DestinationPath 'watchtower-agent-%VERSION%.zip' -Force"
 echo [32m✓ Created: watchtower-agent-%VERSION%.zip[0m
 
+REM Store agent ZIP for bundling with manager
+set "AGENT_ZIP=watchtower-agent-%VERSION%.zip"
+
 REM Build Manager Plugin
 echo.
 echo Building Watchtower Manager plugin...
@@ -120,6 +123,11 @@ mkdir "%MANAGER_DIR%"
 REM Copy manager files
 xcopy /E /I /Q "%SCRIPT_DIR%remote-manager\*" "%MANAGER_DIR%\" > nul
 copy /Y "%VERSION_FILE%" "%MANAGER_DIR%\" > nul
+
+REM Create assets directory and bundle agent plugin
+mkdir "%MANAGER_DIR%\assets"
+copy /Y "%AGENT_ZIP%" "%MANAGER_DIR%\assets\" > nul
+echo Bundled agent plugin: %AGENT_ZIP%
 
 REM Remove development files
 del /S /Q "%MANAGER_DIR%\.DS_Store" 2>nul

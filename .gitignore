@@ -13,6 +13,9 @@ wp-content/upgrade/
 remote-manager/data/sites/
 remote-manager/data/*.json
 
+# Bundled agent plugin (generated during build)
+remote-manager/assets/
+
 # macOS
 .DS_Store
 .AppleDouble
