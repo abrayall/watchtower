@@ -69,6 +69,7 @@ class Watchtower_Agent_REST_Controller {
             'wordpress_version' => get_bloginfo('version'),
             'php_version' => PHP_VERSION,
             'site_url' => get_site_url(),
+            'admin_url' => get_admin_url(),
             'admin_email' => get_option('admin_email'),
             'updraftplus_installed' => class_exists('UpdraftPlus'),
             'timestamp' => current_time('mysql'),
