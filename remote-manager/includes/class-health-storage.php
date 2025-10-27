@@ -111,7 +111,25 @@ class Watchtower_Manager_Health_Storage {
         $json = file_get_contents($file_path);
         $health_data = json_decode($json, true);
 
-        return is_array($health_data) ? $health_data : null;
+        if (!is_array($health_data)) {
+            return null;
+        }
+
+        // Merge in static configuration data from agent storage
+        $agent_storage = new Watchtower_Manager_Agent_Storage();
+        $agent = $agent_storage->get_agent_by_url($site_url);
+
+        if ($agent) {
+            // Add static configuration fields from agent info
+            $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
+            foreach ($static_keys as $key) {
+                if (isset($agent[$key])) {
+                    $health_data[$key] = $agent[$key];
+                }
+            }
+        }
+
+        return $health_data;
     }
 
     /**
