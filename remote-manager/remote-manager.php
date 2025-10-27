@@ -48,6 +48,7 @@ require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-watchtower-manager.
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-rest-api-controller.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-agent-storage.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-health-storage.php';
+require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-auto-updater.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-admin-dashboard.php';
 
 // Initialize the plugin

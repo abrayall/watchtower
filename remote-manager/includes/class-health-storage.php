@@ -239,6 +239,82 @@ class Watchtower_Manager_Health_Storage {
     }
 
     /**
+     * Check and update agent version if needed
+     */
+    public function check_and_update_agent_version($agent_data) {
+        $auto_updater = new Watchtower_Manager_Auto_Updater();
+
+        if (!$auto_updater->has_bundled_agent()) {
+            return array(
+                'checked' => false,
+                'error' => 'No bundled agent available'
+            );
+        }
+
+        // Get agent version from /info endpoint
+        $info_url = $agent_data['site_url'] . '/wp-json/watchtower-agent/v1/info';
+
+        $response = wp_remote_get($info_url, array(
+            'timeout' => 10,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'checked' => false,
+                'error' => 'Could not fetch agent info: ' . $response->get_error_message()
+            );
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $info_data = json_decode($body, true);
+
+        if (!$info_data || !isset($info_data['version'])) {
+            return array(
+                'checked' => false,
+                'error' => 'Invalid info response'
+            );
+        }
+
+        $agent_version = $info_data['version'];
+        $needs_update = $auto_updater->needs_update($agent_version);
+
+        if (!$needs_update) {
+            return array(
+                'checked' => true,
+                'needs_update' => false,
+                'agent_version' => $agent_version,
+                'bundled_version' => $auto_updater->get_bundled_agent_version()
+            );
+        }
+
+        // Auto-update is needed - check if auto-update is enabled
+        $auto_update_enabled = get_option('watchtower_auto_update_agents', false);
+
+        if (!$auto_update_enabled) {
+            return array(
+                'checked' => true,
+                'needs_update' => true,
+                'auto_updated' => false,
+                'agent_version' => $agent_version,
+                'bundled_version' => $auto_updater->get_bundled_agent_version(),
+                'message' => 'Auto-update disabled'
+            );
+        }
+
+        // Perform auto-update
+        $update_result = $auto_updater->update_agent($agent_data);
+
+        return array_merge(array(
+            'checked' => true,
+            'needs_update' => true,
+            'auto_updated' => $update_result['success'],
+            'agent_version' => $agent_version,
+            'bundled_version' => $auto_updater->get_bundled_agent_version()
+        ), $update_result);
+    }
+
+    /**
      * Get age of health data in seconds
      */
     public function get_health_data_age($site_url) {
