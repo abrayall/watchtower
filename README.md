@@ -160,8 +160,13 @@ These ZIP files can be uploaded directly to WordPress via **Plugins → Add New 
 Version information is managed using **git tags**. The build scripts automatically:
 1. Read the latest git tag matching the format `v*.*.*` (e.g., `v0.0.1`)
 2. Parse the version numbers from the tag
-3. Generate `version.properties` during the build process
-4. Include it in both plugin packages
+3. If there are commits after the tag, append the short commit hash to the maintenance version (e.g., `1-78b24c1`)
+4. Generate `version.properties` during the build process
+5. Include it in both plugin packages
+
+**Version Format:**
+- **Exact tag**: `v0.0.1` → version `0.0.1`
+- **After tag**: `v0.0.1-1-g78b24c1` → version `0.0.1-78b24c1`
 
 **To release a new version:**
 ```bash
@@ -172,6 +177,9 @@ git push origin v0.0.2
 # Build the plugins
 ./build.sh  # or build.bat on Windows
 ```
+
+**Development builds:**
+Any commits after a tag will automatically include the commit hash in the version number, making it easy to identify development builds vs. official releases.
 
 The plugins will automatically use the version from the latest git tag. If no tag exists, the build defaults to `v0.0.1`.
 
