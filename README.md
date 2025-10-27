@@ -130,6 +130,51 @@ Both plugins support WordPress multisite installations:
 - Automatic detection of local vs. remote sites
 - Proper handling of subdirectory and subdomain installations
 
+## Building
+
+### Creating Plugin Packages
+
+Build scripts are provided to package the plugins as WordPress-ready ZIP files:
+
+**Unix/Linux/Mac:**
+```bash
+./build.sh
+```
+
+**Windows:**
+```cmd
+build.bat
+```
+
+The build process will:
+1. Read the version from `version.properties`
+2. Create distributable packages for both plugins
+3. Output ZIP files to the `build/` directory:
+   - `watchtower-agent-{version}.zip`
+   - `watchtower-manager-{version}.zip`
+
+These ZIP files can be uploaded directly to WordPress via **Plugins → Add New → Upload Plugin**.
+
+### Version Management
+
+Version information is managed using **git tags**. The build scripts automatically:
+1. Read the latest git tag matching the format `v*.*.*` (e.g., `v0.0.1`)
+2. Parse the version numbers from the tag
+3. Generate `version.properties` during the build process
+4. Include it in both plugin packages
+
+**To release a new version:**
+```bash
+# Create and push a new version tag
+git tag v0.0.2
+git push origin v0.0.2
+
+# Build the plugins
+./build.sh  # or build.bat on Windows
+```
+
+The plugins will automatically use the version from the latest git tag. If no tag exists, the build defaults to `v0.0.1`.
+
 ## Development
 
 ### Testing Environment
