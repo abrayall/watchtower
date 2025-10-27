@@ -151,8 +151,8 @@ class Watchtower_Manager_Health_Storage {
     public function fetch_and_save_health($agent) {
         $site_url = $agent['site_url'];
 
-        // Build health endpoint URL
-        $health_url = $site_url . '/wp-json/watchtower-agent/v1/health';
+        // Build health endpoint URL using query parameter format (more compatible)
+        $health_url = $site_url . '/?rest_route=/watchtower-agent/v1/health';
 
         // For local agents (same WordPress instance), use internal address
         // Check if the host and port match any site in this WordPress installation
@@ -170,10 +170,21 @@ class Watchtower_Manager_Health_Storage {
             'sslverify' => false,
         );
 
+        // Docker container translation: if agent is localhost with non-standard port, try container name
+        if ($agent_host === 'localhost' && $agent_port !== 80 && $agent_port !== 443) {
+            // Map common localhost ports to Docker container names
+            $port_to_container = array(
+                '8083' => 'watchtower_agent_site',
+            );
+
+            if (isset($port_to_container[$agent_port])) {
+                $health_url = 'http://' . $port_to_container[$agent_port] . '/?rest_route=/watchtower-agent/v1/health';
+            }
+        }
         // If same host and port, it's local - use internal address
-        if ($agent_host === $current_host && $agent_port === $current_port) {
+        elseif ($agent_host === $current_host && $agent_port === $current_port) {
             $path = $parsed_agent['path'] ?? '';
-            $health_url = 'http://127.0.0.1' . $path . '/wp-json/watchtower-agent/v1/health';
+            $health_url = 'http://127.0.0.1' . $path . '/?rest_route=/watchtower-agent/v1/health';
 
             // Add Host header to prevent redirect
             $host_header = $agent_host;
