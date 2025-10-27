@@ -39,6 +39,7 @@ class Watchtower_Manager_Admin_Dashboard {
 
         // Handle AJAX actions
         add_action('wp_ajax_watchtower_manager_remove_agent', array($this, 'ajax_remove_agent'));
+        add_action('wp_ajax_watchtower_manager_update_agent', array($this, 'ajax_update_agent'));
     }
 
     /**
@@ -791,6 +792,54 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     /**
+     * AJAX: Update agent
+     */
+    public function ajax_update_agent() {
+        check_ajax_referer('watchtower_manager_update_agent', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Use the health storage to check and update the agent
+        $result = $this->health_storage->check_and_update_agent_version($agent);
+
+        if (!isset($result['checked']) || !$result['checked']) {
+            $error = isset($result['error']) ? $result['error'] : 'Failed to check agent version';
+            wp_send_json_error(array('message' => $error));
+            return;
+        }
+
+        if (!isset($result['needs_update']) || !$result['needs_update']) {
+            wp_send_json_error(array('message' => 'Agent is already up to date'));
+            return;
+        }
+
+        if (!isset($result['auto_updated']) || !$result['auto_updated']) {
+            $message = isset($result['message']) ? $result['message'] : 'Update failed';
+            if (isset($result['error'])) {
+                $message .= ': ' . $result['error'];
+            }
+            wp_send_json_error(array('message' => $message));
+            return;
+        }
+
+        wp_send_json_success(array(
+            'message' => 'Agent updated successfully',
+            'agent_version' => $result['agent_version'],
+            'bundled_version' => $result['bundled_version']
+        ));
+    }
+
+    /**
      * Determine overall health status
      */
     private function determine_health_status($health_data) {
@@ -1116,10 +1165,53 @@ class Watchtower_Manager_Admin_Dashboard {
                     <button class="button" onclick="location.reload();">
                         <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Refresh Health Data
                     </button>
+                    <button class="button button-secondary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
+                        <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent
+                    </button>
                 </p>
             </div>
         </div>
     </div>
+
+    <script>
+    jQuery(document).ready(function($) {
+        $('.watchtower-update-agent-btn').on('click', function() {
+            var button = $(this);
+            var siteUrl = button.data('site-url');
+
+            if (!confirm('Are you sure you want to update the agent plugin on this site?')) {
+                return;
+            }
+
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Updating...');
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_update_agent',
+                site_url: siteUrl,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_update_agent'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Update Successful!').css('color', '#00a32a');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    alert('Update failed: ' + (response.data.message || 'Unknown error'));
+                    button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+                }
+            }).fail(function() {
+                alert('Update request failed. Please try again.');
+                button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+            });
+        });
+    });
+    </script>
+    <style>
+    @keyframes rotation {
+        from { transform: rotate(0deg); }
+        to { transform: rotate(359deg); }
+    }
+    </style>
     <?php
 }
 }
