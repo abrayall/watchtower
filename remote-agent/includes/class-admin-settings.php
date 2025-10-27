@@ -21,6 +21,49 @@ class Watchtower_Agent_Admin_Settings {
 
         // Handle manual registration
         add_action('admin_post_watchtower_agent_register', array($this, 'handle_manual_registration'));
+
+        // Show admin notice if manager URL not configured
+        add_action('admin_notices', array($this, 'show_configuration_notice'));
+    }
+
+    /**
+     * Show admin notice if manager URL is not configured
+     */
+    public function show_configuration_notice() {
+        // Don't show on the settings page itself
+        $screen = get_current_screen();
+        if ($screen && $screen->id === 'settings_page_watchtower-agent') {
+            return;
+        }
+
+        // Check if manager is installed locally (no need for remote URL)
+        $manager_active = is_plugin_active('remote-manager/remote-manager.php');
+        if ($manager_active) {
+            return;
+        }
+
+        // Check if manager URL is configured
+        $manager_url = get_option('watchtower_agent_manager_url', '');
+        if (!empty($manager_url)) {
+            return;
+        }
+
+        // Check if user can manage options
+        if (!current_user_can('manage_options')) {
+            return;
+        }
+
+        // Show the notice
+        $settings_url = admin_url('options-general.php?page=watchtower-agent');
+        ?>
+        <div class="notice notice-warning is-dismissible">
+            <p>
+                <strong>Watchtower Agent:</strong>
+                Remote manager URL has not been configured.
+                <a href="<?php echo esc_url($settings_url); ?>">Configure now</a>
+            </p>
+        </div>
+        <?php
     }
 
     /**

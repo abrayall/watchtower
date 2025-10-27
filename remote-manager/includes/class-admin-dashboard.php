@@ -1104,7 +1104,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
                 <h2>Actions</h2>
                 <p>
-                    <a href="<?php echo esc_url($site_url . '/wp-admin'); ?>" class="button button-primary" target="_blank">
+                    <a href="<?php echo esc_url($agent['admin_url'] ?? ($site_url . '/wp-admin')); ?>" class="button button-primary" target="_blank">
                         <span class="dashicons dashicons-external" style="margin-top: 3px;"></span> Open Site Dashboard
                     </a>
                     <a href="<?php echo esc_url($site_url . '/wp-json/watchtower-agent/v1/info'); ?>" class="button" target="_blank">
