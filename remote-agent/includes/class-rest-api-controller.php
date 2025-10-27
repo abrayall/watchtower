@@ -57,6 +57,13 @@ class Watchtower_Agent_REST_Controller {
             'callback' => array($this, 'get_health'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
+
+        // Update endpoint (authenticated) - for auto-updating the agent plugin
+        register_rest_route($this->namespace, '/update', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'update_plugin'),
+            'permission_callback' => array($this, 'check_permission'),
+        ));
     }
 
     /**
@@ -385,6 +392,133 @@ class Watchtower_Agent_REST_Controller {
         }
 
         return $size;
+    }
+
+    /**
+     * Update agent plugin from uploaded ZIP file
+     */
+    public function update_plugin($request) {
+        // Get uploaded file from request
+        $files = $request->get_file_params();
+
+        if (empty($files['file'])) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'No file uploaded',
+            ), 400);
+        }
+
+        $file = $files['file'];
+
+        // Validate file type
+        if ($file['type'] !== 'application/zip') {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'File must be a ZIP archive',
+            ), 400);
+        }
+
+        // Validate file uploaded successfully
+        if ($file['error'] !== UPLOAD_ERR_OK) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'File upload error: ' . $file['error'],
+            ), 400);
+        }
+
+        // Use WordPress filesystem
+        require_once(ABSPATH . 'wp-admin/includes/file.php');
+        WP_Filesystem();
+        global $wp_filesystem;
+
+        // Create temp directory
+        $temp_dir = get_temp_dir() . 'watchtower-update-' . time();
+        if (!$wp_filesystem->mkdir($temp_dir, 0755)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Could not create temp directory',
+            ), 500);
+        }
+
+        // Extract ZIP to temp directory
+        $unzip_result = unzip_file($file['tmp_name'], $temp_dir);
+        if (is_wp_error($unzip_result)) {
+            $wp_filesystem->rmdir($temp_dir, true);
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Could not extract ZIP: ' . $unzip_result->get_error_message(),
+            ), 500);
+        }
+
+        // Find the plugin directory in extracted files
+        $extracted_files = $wp_filesystem->dirlist($temp_dir);
+        if (empty($extracted_files)) {
+            $wp_filesystem->rmdir($temp_dir, true);
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'No files found in ZIP',
+            ), 400);
+        }
+
+        // Get first directory (should be 'remote-agent')
+        $plugin_dir = key($extracted_files);
+        $source_path = trailingslashit($temp_dir) . $plugin_dir;
+        $dest_path = WP_PLUGIN_DIR . '/' . $plugin_dir;
+
+        // Remove existing plugin directory
+        if ($wp_filesystem->exists($dest_path)) {
+            if (!$wp_filesystem->rmdir($dest_path, true)) {
+                $wp_filesystem->rmdir($temp_dir, true);
+                return new WP_REST_Response(array(
+                    'success' => false,
+                    'error' => 'Could not remove old plugin directory',
+                ), 500);
+            }
+        }
+
+        // Move new plugin files
+        if (!$wp_filesystem->move($source_path, $dest_path)) {
+            $wp_filesystem->rmdir($temp_dir, true);
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Could not move plugin files',
+            ), 500);
+        }
+
+        // Clean up temp directory
+        $wp_filesystem->rmdir($temp_dir, true);
+
+        // Activate plugin (find main plugin file)
+        $plugin_file = null;
+        foreach (array('remote-agent.php', $plugin_dir . '.php') as $possible_file) {
+            $check_path = $plugin_dir . '/' . $possible_file;
+            if (file_exists(WP_PLUGIN_DIR . '/' . $check_path)) {
+                $plugin_file = $check_path;
+                break;
+            }
+        }
+
+        if (!$plugin_file) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Could not find plugin main file',
+            ), 500);
+        }
+
+        // Activate the plugin
+        $activate_result = activate_plugin($plugin_file);
+        if (is_wp_error($activate_result)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Plugin installed but activation failed: ' . $activate_result->get_error_message(),
+            ), 500);
+        }
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => 'Plugin updated successfully',
+            'plugin' => $plugin_file,
+        ), 200);
     }
 
     /**
