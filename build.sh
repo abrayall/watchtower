@@ -86,6 +86,10 @@ mkdir -p "$AGENT_DIR"
 cp -r remote-agent/* "$AGENT_DIR/"
 cp "$VERSION_FILE" "$AGENT_DIR/"
 
+# Update version in plugin header
+sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$AGENT_DIR/remote-agent.php"
+rm -f "$AGENT_DIR/remote-agent.php.bak"
+
 # Remove development files
 find "$AGENT_DIR" -name ".DS_Store" -delete
 find "$AGENT_DIR" -name "*.swp" -delete
@@ -109,6 +113,10 @@ mkdir -p "$MANAGER_DIR"
 # Copy manager files
 cp -r "$SCRIPT_DIR/remote-manager/"* "$MANAGER_DIR/"
 cp "$VERSION_FILE" "$MANAGER_DIR/"
+
+# Update version in plugin header
+sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$MANAGER_DIR/remote-manager.php"
+rm -f "$MANAGER_DIR/remote-manager.php.bak"
 
 # Create assets directory and bundle agent plugin
 mkdir -p "$MANAGER_DIR/assets"
