@@ -29,6 +29,28 @@ class Watchtower_Manager_Auto_Updater {
     }
 
     /**
+     * Translate URL for Docker localhost to container name
+     */
+    private function translate_url($url) {
+        $parsed = parse_url($url);
+        $host = $parsed['host'] ?? '';
+        $port = $parsed['port'] ?? ($parsed['scheme'] === 'https' ? 443 : 80);
+
+        // Docker container translation: if localhost with non-standard port, use container name
+        if ($host === 'localhost' && $port !== 80 && $port !== 443) {
+            $port_to_container = array(
+                '8083' => 'watchtower_agent_site',
+            );
+
+            if (isset($port_to_container[$port])) {
+                return 'http://' . $port_to_container[$port];
+            }
+        }
+
+        return $url;
+    }
+
+    /**
      * Find the bundled agent plugin ZIP file
      */
     private function find_agent_plugin_path() {
@@ -102,12 +124,10 @@ class Watchtower_Manager_Auto_Updater {
         $username = $agent_data['username'];
         $password = $agent_data['password'];
 
-        // Step 1: Delete existing plugin via WordPress API
-        $delete_result = $this->delete_plugin($site_url, $username, $password, 'remote-agent/remote-agent');
+        // Skip deletion - WordPress will handle replacing the plugin
+        // (Deleting an active plugin via REST API is problematic)
 
-        // Note: It's ok if delete fails - plugin might not exist or might be active
-
-        // Step 2: Install new version via WordPress API
+        // Install new version via WordPress API
         $install_result = $this->install_plugin_from_zip($site_url, $username, $password);
 
         return $install_result;
@@ -117,7 +137,9 @@ class Watchtower_Manager_Auto_Updater {
      * Delete existing plugin using WordPress REST API
      */
     private function delete_plugin($site_url, $username, $password, $plugin_slug) {
-        $endpoint = $site_url . '/wp-json/wp/v2/plugins/' . $plugin_slug;
+        $translated_url = $this->translate_url($site_url);
+        // Use query parameter format for maximum compatibility
+        $endpoint = $translated_url . '/?rest_route=/wp/v2/plugins/' . urlencode($plugin_slug);
 
         $response = wp_remote_request($endpoint, array(
             'method' => 'DELETE',
@@ -133,7 +155,7 @@ class Watchtower_Manager_Auto_Updater {
     }
 
     /**
-     * Install plugin from ZIP using WordPress REST API
+     * Install plugin from ZIP using custom Watchtower Agent endpoint
      */
     private function install_plugin_from_zip($site_url, $username, $password) {
         // Read plugin file
@@ -146,7 +168,9 @@ class Watchtower_Manager_Auto_Updater {
         }
 
         $filename = basename($this->agent_plugin_path);
-        $endpoint = $site_url . '/wp-json/wp/v2/plugins';
+        $translated_url = $this->translate_url($site_url);
+        // Use custom update endpoint (works without pretty permalinks)
+        $endpoint = $translated_url . '/?rest_route=/watchtower-agent/v1/update';
 
         // Create boundary for multipart/form-data
         $boundary = wp_generate_password(24);
@@ -157,9 +181,6 @@ class Watchtower_Manager_Auto_Updater {
         $body .= 'Content-Disposition: form-data; name="file"; filename="' . $filename . '"' . "\r\n";
         $body .= 'Content-Type: application/zip' . "\r\n\r\n";
         $body .= $file_contents . "\r\n";
-        $body .= '--' . $boundary . "\r\n";
-        $body .= 'Content-Disposition: form-data; name="status"' . "\r\n\r\n";
-        $body .= 'active' . "\r\n";
         $body .= '--' . $boundary . '--';
 
         $response = wp_remote_post($endpoint, array(

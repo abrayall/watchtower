@@ -281,7 +281,23 @@ class Watchtower_Manager_Health_Storage {
         }
 
         // Get agent version from /info endpoint
-        $info_url = $agent_data['site_url'] . '/wp-json/watchtower-agent/v1/info';
+        $site_url = $agent_data['site_url'];
+        $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
+
+        // Apply Docker localhost translation if needed
+        $parsed_agent = parse_url($site_url);
+        $agent_host = $parsed_agent['host'] ?? '';
+        $agent_port = $parsed_agent['port'] ?? ($parsed_agent['scheme'] === 'https' ? 443 : 80);
+
+        if ($agent_host === 'localhost' && $agent_port !== 80 && $agent_port !== 443) {
+            $port_to_container = array(
+                '8083' => 'watchtower_agent_site',
+            );
+
+            if (isset($port_to_container[$agent_port])) {
+                $info_url = 'http://' . $port_to_container[$agent_port] . '/?rest_route=/watchtower-agent/v1/info';
+            }
+        }
 
         $response = wp_remote_get($info_url, array(
             'timeout' => 10,
