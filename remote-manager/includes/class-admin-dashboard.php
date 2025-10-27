@@ -956,6 +956,12 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td><?php echo esc_html($health_data['php']['version']); ?></td>
                                     </tr>
                                     <?php endif; ?>
+                                    <?php if (isset($agent['agent_version'])): ?>
+                                    <tr>
+                                        <td>Agent:</td>
+                                        <td><?php echo esc_html($agent['agent_version']); ?></td>
+                                    </tr>
+                                    <?php endif; ?>
                                     <?php if (isset($health_data['theme'])): ?>
                                     <tr>
                                         <td>Theme:</td>
@@ -1084,7 +1090,14 @@ class Watchtower_Manager_Admin_Dashboard {
                             </tr>
                         </thead>
                         <tbody>
-                            <?php foreach ($health_data['plugins']['active_plugins'] as $plugin): ?>
+                            <?php
+                            // Sort plugins alphabetically by name
+                            $sorted_plugins = $health_data['plugins']['active_plugins'];
+                            usort($sorted_plugins, function($a, $b) {
+                                return strcasecmp($a['name'], $b['name']);
+                            });
+                            foreach ($sorted_plugins as $plugin):
+                            ?>
                                 <tr>
                                     <td><?php echo esc_html($plugin['name']); ?></td>
                                     <td><?php echo esc_html($plugin['version']); ?></td>
