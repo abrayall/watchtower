@@ -100,6 +100,9 @@ REM Copy agent files
 xcopy /E /I /Q "remote-agent\*" "%AGENT_DIR%\" > nul
 copy /Y "%VERSION_FILE%" "%AGENT_DIR%\" > nul
 
+REM Update version in plugin header
+powershell -Command "(Get-Content '%AGENT_DIR%\remote-agent.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%AGENT_DIR%\remote-agent.php'"
+
 REM Remove development files
 del /S /Q "%AGENT_DIR%\.DS_Store" 2>nul
 del /S /Q "%AGENT_DIR%\*.swp" 2>nul
@@ -123,6 +126,9 @@ mkdir "%MANAGER_DIR%"
 REM Copy manager files
 xcopy /E /I /Q "%SCRIPT_DIR%remote-manager\*" "%MANAGER_DIR%\" > nul
 copy /Y "%VERSION_FILE%" "%MANAGER_DIR%\" > nul
+
+REM Update version in plugin header
+powershell -Command "(Get-Content '%MANAGER_DIR%\remote-manager.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%MANAGER_DIR%\remote-manager.php'"
 
 REM Create assets directory and bundle agent plugin
 mkdir "%MANAGER_DIR%\assets"

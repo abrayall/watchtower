@@ -53,12 +53,17 @@ remote-manager/
 │   ├── class-watchtower-manager.php  # Core manager class
 │   ├── class-agent-storage.php       # Agent registration and data storage
 │   ├── class-health-storage.php      # Health monitoring and data retrieval
+│   ├── class-auto-updater.php        # Auto-update functionality
 │   └── class-admin-dashboard.php     # Admin UI and dashboard
-└── data/
-    └── sites/
-        └── {hostname-port-path}/     # Individual site directories
-            ├── info.json             # Agent configuration
-            └── health.json           # Latest health data
+└── assets/
+    └── watchtower-agent-{version}.zip # Bundled agent plugin
+
+Data Directory (outside plugin, persists across updates):
+wp-content/watchtower-manager/
+└── sites/
+    └── {hostname-port-path}/         # Individual site directories
+        ├── info.json                 # Agent configuration
+        └── health.json               # Latest health data
 ```
 
 ### Agent Plugin Structure

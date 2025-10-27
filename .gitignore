@@ -9,10 +9,6 @@ wp-content/cache/
 wp-content/backups/
 wp-content/upgrade/
 
-# Plugin data directories (should be generated at runtime)
-remote-manager/data/sites/
-remote-manager/data/*.json
-
 # Bundled agent plugin (generated during build)
 remote-manager/assets/
 
