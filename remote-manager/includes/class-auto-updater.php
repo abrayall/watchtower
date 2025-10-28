@@ -206,14 +206,18 @@ class Watchtower_Manager_Auto_Updater {
 
         if ($response_code !== 200 && $response_code !== 201) {
             $error_message = 'Installation failed with code ' . $response_code;
-            if ($result && isset($result['message'])) {
+
+            // Try to get detailed error from response
+            if ($result && isset($result['error'])) {
+                $error_message = $result['error'];
+            } elseif ($result && isset($result['message'])) {
                 $error_message = $result['message'];
             }
+
             return array(
                 'success' => false,
                 'error' => $error_message,
                 'response_code' => $response_code,
-                'response_body' => $response_body
             );
         }
 

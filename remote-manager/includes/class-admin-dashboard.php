@@ -40,6 +40,7 @@ class Watchtower_Manager_Admin_Dashboard {
         // Handle AJAX actions
         add_action('wp_ajax_watchtower_manager_remove_agent', array($this, 'ajax_remove_agent'));
         add_action('wp_ajax_watchtower_manager_update_agent', array($this, 'ajax_update_agent'));
+        add_action('wp_ajax_watchtower_manager_scan_agent', array($this, 'ajax_scan_agent'));
     }
 
     /**
@@ -706,6 +707,10 @@ class Watchtower_Manager_Admin_Dashboard {
                                                    target="_blank">
                                                     WordPress
                                                 </a>
+                                                <button class="button button-small scan-site"
+                                                        data-site-url="<?php echo esc_attr($agent['site_url']); ?>">
+                                                    Scan
+                                                </button>
                                                 <button class="button button-small button-link-delete remove-site"
                                                         data-site-url="<?php echo esc_attr($agent['site_url']); ?>">
                                                     Remove
@@ -723,6 +728,32 @@ class Watchtower_Manager_Admin_Dashboard {
 
         <script>
         jQuery(document).ready(function($) {
+            // Scan site
+            $('.scan-site').on('click', function(e) {
+                e.preventDefault();
+                var button = $(this);
+                var siteUrl = button.data('site-url');
+                var originalText = button.text();
+
+                button.text('Scanning...').prop('disabled', true);
+
+                $.post(ajaxurl, {
+                    action: 'watchtower_manager_scan_agent',
+                    site_url: siteUrl,
+                    nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
+                }, function(response) {
+                    if (response.success) {
+                        button.text('Done!');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 500);
+                    } else {
+                        alert('Scan failed: ' + response.data.message);
+                        button.text(originalText).prop('disabled', false);
+                    }
+                });
+            });
+
             // Remove site
             $('.remove-site').on('click', function(e) {
                 e.preventDefault();
@@ -763,10 +794,45 @@ class Watchtower_Manager_Admin_Dashboard {
      * Render settings page
      */
     public function render_settings() {
+        // Handle form submission
+        if (isset($_POST['watchtower_settings_submit'])) {
+            check_admin_referer('watchtower_settings');
+
+            $auto_update = isset($_POST['watchtower_auto_update_agents']) ? 1 : 0;
+            update_option('watchtower_auto_update_agents', $auto_update);
+
+            echo '<div class="notice notice-success"><p>Settings saved successfully.</p></div>';
+        }
+
+        $auto_update_enabled = get_option('watchtower_auto_update_agents', false);
         ?>
         <div class="wrap">
-            <h1>WP Remote Manager Settings</h1>
-            <p>Settings page coming soon...</p>
+            <h1>Watchtower Manager Settings</h1>
+
+            <form method="post" action="">
+                <?php wp_nonce_field('watchtower_settings'); ?>
+
+                <table class="form-table">
+                    <tr>
+                        <th scope="row">Auto-Update Agents</th>
+                        <td>
+                            <label>
+                                <input type="checkbox" name="watchtower_auto_update_agents" value="1" <?php checked($auto_update_enabled, 1); ?>>
+                                Automatically update agent plugins when a new version is available
+                            </label>
+                            <p class="description">
+                                When enabled, the manager will automatically update agent plugins during health checks.
+                                The bundled agent version is <?php
+                                $auto_updater = new Watchtower_Manager_Auto_Updater();
+                                echo esc_html($auto_updater->get_bundled_agent_version() ?? 'N/A');
+                                ?>.
+                            </p>
+                        </td>
+                    </tr>
+                </table>
+
+                <?php submit_button('Save Settings', 'primary', 'watchtower_settings_submit'); ?>
+            </form>
         </div>
         <?php
     }
@@ -809,8 +875,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Use the health storage to check and update the agent
-        $result = $this->health_storage->check_and_update_agent_version($agent);
+        // Use the health storage to check and update the agent (force update for manual trigger)
+        $result = $this->health_storage->check_and_update_agent_version($agent, true);
 
         if (!isset($result['checked']) || !$result['checked']) {
             $error = isset($result['error']) ? $result['error'] : 'Failed to check agent version';
@@ -836,6 +902,37 @@ class Watchtower_Manager_Admin_Dashboard {
             'message' => 'Agent updated successfully',
             'agent_version' => $result['agent_version'],
             'bundled_version' => $result['bundled_version']
+        ));
+    }
+
+    /**
+     * AJAX: Scan agent (fetch and save /info and /health data)
+     */
+    public function ajax_scan_agent() {
+        check_ajax_referer('watchtower_manager_scan', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Fetch and save health data (which also fetches and saves info data)
+        $result = $this->health_storage->fetch_and_save_health($agent);
+
+        if (!$result) {
+            wp_send_json_error(array('message' => 'Failed to scan site'));
+            return;
+        }
+
+        wp_send_json_success(array(
+            'message' => 'Site scanned successfully'
         ));
     }
 
@@ -1059,19 +1156,82 @@ class Watchtower_Manager_Admin_Dashboard {
                     <?php
                     // CPU Load Metric (if available)
                     if (isset($health_data['cpu']) && !empty($health_data['cpu'])):
-                        $cpu_load = $health_data['cpu']['load_1min'] ?? 0;
-                        $cpu_status = $this->get_metric_status($cpu_load, ['warning' => 2.0, 'critical' => 4.0]);
+                        $cpu_usage = floatval(str_replace('%', '', $health_data['cpu']['usage_percentage'] ?? '0'));
+                        $cpu_status = $this->get_metric_status($cpu_usage, ['warning' => 75, 'critical' => 90]);
                     ?>
                     <div class="metric-tile <?php echo $cpu_status; ?>">
                         <div class="metric-header">
                             <span class="dashicons dashicons-performance metric-icon <?php echo $cpu_status; ?>"></span>
-                            <h3 class="metric-title">CPU Load</h3>
+                            <h3 class="metric-title">CPU Usage</h3>
                         </div>
-                        <div class="metric-value"><?php echo esc_html($health_data['cpu']['load_1min']); ?></div>
-                        <div class="metric-subtitle">1 Minute Average</div>
+                        <div class="metric-value"><?php echo esc_html($health_data['cpu']['usage_percentage'] ?? 'N/A'); ?></div>
+                        <div class="metric-subtitle"><?php echo esc_html($health_data['cpu']['cores'] ?? 1); ?> Core<?php echo ($health_data['cpu']['cores'] ?? 1) > 1 ? 's' : ''; ?></div>
+                        <div class="progress-bar">
+                            <div class="progress-fill <?php echo $cpu_status; ?>" style="width: <?php echo min($cpu_usage, 100); ?>%"></div>
+                        </div>
                         <div class="metric-details" style="margin-top: 15px;">
-                            <div><strong>5 min:</strong> <?php echo esc_html($health_data['cpu']['load_5min']); ?></div>
-                            <div><strong>15 min:</strong> <?php echo esc_html($health_data['cpu']['load_15min']); ?></div>
+                            <div><strong>Load 1 min:</strong> <?php echo esc_html($health_data['cpu']['load_1min']); ?></div>
+                            <div><strong>Load 5 min:</strong> <?php echo esc_html($health_data['cpu']['load_5min']); ?></div>
+                            <div><strong>Load 15 min:</strong> <?php echo esc_html($health_data['cpu']['load_15min']); ?></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+                </div>
+
+                <!-- Additional Info Tiles (Database, Theme, Constants) -->
+                <div class="metrics-grid" style="margin-top: 20px;">
+                    <!-- Database Tile -->
+                    <?php if (isset($health_data['database'])): ?>
+                    <div class="metric-tile">
+                        <div class="metric-header">
+                            <span class="dashicons dashicons-database metric-icon"></span>
+                            <h3 class="metric-title">Database</h3>
+                        </div>
+                        <div class="metric-value"><?php echo esc_html($health_data['database']['database_name']); ?></div>
+                        <div class="metric-subtitle"><?php echo esc_html($health_data['database']['database_version']); ?></div>
+                        <div class="metric-details" style="margin-top: 15px;">
+                            <div><strong>Host:</strong> <?php echo esc_html($health_data['database']['database_host']); ?></div>
+                            <div><strong>Size:</strong> <?php echo esc_html($health_data['database']['database_size'] ?? 'N/A'); ?></div>
+                            <div><strong>Prefix:</strong> <code><?php echo esc_html($health_data['database']['table_prefix']); ?></code></div>
+                            <div><strong>Charset:</strong> <?php echo esc_html($health_data['database']['database_charset']); ?></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- Theme Tile -->
+                    <?php if (isset($health_data['theme'])): ?>
+                    <div class="metric-tile">
+                        <div class="metric-header">
+                            <span class="dashicons dashicons-admin-appearance metric-icon"></span>
+                            <h3 class="metric-title">Active Theme</h3>
+                        </div>
+                        <div class="metric-value"><?php echo esc_html($health_data['theme']['name']); ?></div>
+                        <div class="metric-subtitle">Version <?php echo esc_html($health_data['theme']['version']); ?></div>
+                        <div class="metric-details" style="margin-top: 15px;">
+                            <div><strong>Template:</strong> <code><?php echo esc_html($health_data['theme']['template']); ?></code></div>
+                            <div><strong>Stylesheet:</strong> <code><?php echo esc_html($health_data['theme']['stylesheet']); ?></code></div>
+                        </div>
+                    </div>
+                    <?php endif; ?>
+
+                    <!-- WordPress Constants Tile -->
+                    <?php if (isset($health_data['constants'])): ?>
+                    <div class="metric-tile">
+                        <div class="metric-header">
+                            <span class="dashicons dashicons-admin-settings metric-icon"></span>
+                            <h3 class="metric-title">WordPress Constants</h3>
+                        </div>
+                        <div class="metric-details" style="margin-top: 15px;">
+                            <?php foreach ($health_data['constants'] as $constant => $value): ?>
+                            <div>
+                                <strong><?php echo esc_html($constant); ?>:</strong>
+                                <?php if (is_bool($value)): ?>
+                                    <code><?php echo $value ? 'true' : 'false'; ?></code>
+                                <?php else: ?>
+                                    <code><?php echo esc_html($value); ?></code>
+                                <?php endif; ?>
+                            </div>
+                            <?php endforeach; ?>
                         </div>
                     </div>
                     <?php endif; ?>
@@ -1105,39 +1265,6 @@ class Watchtower_Manager_Admin_Dashboard {
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
-                    </table>
-                </div>
-                <?php endif; ?>
-
-                <!-- Database Information -->
-                <?php if (isset($health_data['database'])): ?>
-                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
-                    <h2>Database Information</h2>
-                    <table class="form-table" style="margin-top: 15px;">
-                        <tr>
-                            <th scope="row">Database Name</th>
-                            <td><?php echo esc_html($health_data['database']['database_name']); ?></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Database Version</th>
-                            <td><?php echo esc_html($health_data['database']['database_version']); ?></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Database Host</th>
-                            <td><?php echo esc_html($health_data['database']['database_host']); ?></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Database Size</th>
-                            <td><?php echo esc_html($health_data['database']['database_size'] ?? 'N/A'); ?></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Table Prefix</th>
-                            <td><?php echo esc_html($health_data['database']['table_prefix']); ?></td>
-                        </tr>
-                        <tr>
-                            <th scope="row">Charset</th>
-                            <td><?php echo esc_html($health_data['database']['database_charset']); ?></td>
-                        </tr>
                     </table>
                 </div>
                 <?php endif; ?>
