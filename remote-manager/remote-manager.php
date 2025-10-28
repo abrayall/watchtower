@@ -1,10 +1,10 @@
 <?php
 /**
- * Plugin Name: Watchtower Manager
+ * Plugin Name: Watchtower
  * Plugin URI: https://github.com/abrayall/watchtower
  * Description: Central management plugin to control and monitor multiple Watchtower Agent installations across WordPress sites
  * Version: 1.0.0
- * Author: abrayall
+ * Author: Brayall, LLC
  * Author URI: https://github.com/abrayall
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html

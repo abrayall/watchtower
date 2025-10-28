@@ -37,6 +37,10 @@ class Watchtower_Agent_REST_Controller {
         $update_management = new Watchtower_Agent_Update_Management($this->namespace);
         $update_management->register_routes();
 
+        // Log Management endpoints
+        $log_management = new Watchtower_Agent_Log_Management($this->namespace);
+        $log_management->register_routes();
+
         // Info endpoint (public)
         register_rest_route($this->namespace, '/info', array(
             'methods' => WP_REST_Server::READABLE,

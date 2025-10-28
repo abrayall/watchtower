@@ -207,10 +207,19 @@ The manager plugin automatically polls agent sites every 5 minutes via WordPress
 - Sensitive operations require `manage_options` capability
 - SSL verification can be disabled for local development
 
+## Future Enhancements
+
+The following features are planned for future releases:
+
+- **User Management Support** - Create, edit, and manage WordPress users across all managed sites from the central dashboard
+- **Backup Support** - Enhanced backup management with scheduling, restoration, and monitoring capabilities
+- **Traffic Stats Integration** - Support for popular analytics plugins (MonsterInsights, Google Analytics 4) to display traffic metrics in the dashboard
+- **Security Integration** - Integration with security plugins (Wordfence, etc.) to monitor security events, firewall status, and threats across managed sites
+
 ## License
 
 GPL v2 or later
 
 ## Author
 
-abrayall
+Brayall, LLC
