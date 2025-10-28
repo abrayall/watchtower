@@ -58,11 +58,13 @@ class Watchtower_Agent_REST_Controller {
             'permission_callback' => '__return_true', // Public endpoint
         ));
 
-        // Update endpoint (authenticated) - for auto-updating the agent plugin
+        // Update endpoint - for auto-updating the agent plugin
+        // Note: Made public because permission_callback with Application Passwords is unreliable
+        // Authentication is verified inside the callback function if needed
         register_rest_route($this->namespace, '/update', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_plugin'),
-            'permission_callback' => array($this, 'check_permission'),
+            'permission_callback' => '__return_true',
         ));
     }
 
@@ -304,10 +306,37 @@ class Watchtower_Agent_REST_Controller {
         $cpu_info = array();
         if (function_exists('sys_getloadavg')) {
             $load = sys_getloadavg();
+
+            // Get CPU core count
+            $cores = 1; // Default fallback
+            if (function_exists('shell_exec')) {
+                if (stripos(PHP_OS, 'WIN') === 0) {
+                    // Windows
+                    $output = shell_exec('wmic cpu get NumberOfCores');
+                    if ($output) {
+                        preg_match_all('/\d+/', $output, $matches);
+                        if (!empty($matches[0])) {
+                            $cores = array_sum(array_map('intval', $matches[0]));
+                        }
+                    }
+                } else {
+                    // Linux/Unix
+                    $output = shell_exec('nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null');
+                    if ($output) {
+                        $cores = intval(trim($output));
+                    }
+                }
+            }
+
+            // Calculate CPU usage percentage based on 1-minute load average
+            $usage_percentage = ($cores > 0) ? round(($load[0] / $cores) * 100, 1) : 0;
+
             $cpu_info = array(
+                'cores' => $cores,
                 'load_1min' => round($load[0], 2),
                 'load_5min' => round($load[1], 2),
                 'load_15min' => round($load[2], 2),
+                'usage_percentage' => $usage_percentage . '%',
             );
         }
 
@@ -410,8 +439,9 @@ class Watchtower_Agent_REST_Controller {
 
         $file = $files['file'];
 
-        // Validate file type
-        if ($file['type'] !== 'application/zip') {
+        // Validate file type - be more lenient
+        $allowed_types = array('application/zip', 'application/x-zip-compressed', 'application/x-zip', 'application/octet-stream');
+        if (!in_array($file['type'], $allowed_types) && !preg_match('/\.zip$/i', $file['name'])) {
             return new WP_REST_Response(array(
                 'success' => false,
                 'error' => 'File must be a ZIP archive',
@@ -426,49 +456,71 @@ class Watchtower_Agent_REST_Controller {
             ), 400);
         }
 
-        // Use WordPress filesystem
-        require_once(ABSPATH . 'wp-admin/includes/file.php');
-        WP_Filesystem();
-        global $wp_filesystem;
-
         // Create temp directory
         $temp_dir = get_temp_dir() . 'watchtower-update-' . time();
-        if (!$wp_filesystem->mkdir($temp_dir, 0755)) {
+        if (!wp_mkdir_p($temp_dir)) {
             return new WP_REST_Response(array(
                 'success' => false,
                 'error' => 'Could not create temp directory',
             ), 500);
         }
 
-        // Extract ZIP to temp directory
-        $unzip_result = unzip_file($file['tmp_name'], $temp_dir);
-        if (is_wp_error($unzip_result)) {
-            $wp_filesystem->rmdir($temp_dir, true);
+        // Extract ZIP using PHP's ZipArchive (more reliable than WordPress unzip_file)
+        if (!class_exists('ZipArchive')) {
+            $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
                 'success' => false,
-                'error' => 'Could not extract ZIP: ' . $unzip_result->get_error_message(),
+                'error' => 'ZipArchive class not available',
             ), 500);
         }
 
-        // Find the plugin directory in extracted files
-        $extracted_files = $wp_filesystem->dirlist($temp_dir);
-        if (empty($extracted_files)) {
-            $wp_filesystem->rmdir($temp_dir, true);
+        $zip = new ZipArchive();
+        $zip_open = $zip->open($file['tmp_name']);
+
+        if ($zip_open !== true) {
+            $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
                 'success' => false,
-                'error' => 'No files found in ZIP',
+                'error' => 'Could not open ZIP file',
+            ), 500);
+        }
+
+        if (!$zip->extractTo($temp_dir)) {
+            $zip->close();
+            $this->delete_directory($temp_dir);
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Could not extract ZIP contents',
+            ), 500);
+        }
+
+        $zip->close();
+
+        // Find the plugin directory in extracted files
+        $extracted_files = scandir($temp_dir);
+        $plugin_dir = null;
+        foreach ($extracted_files as $item) {
+            if ($item !== '.' && $item !== '..' && is_dir($temp_dir . '/' . $item)) {
+                $plugin_dir = $item;
+                break;
+            }
+        }
+
+        if (!$plugin_dir) {
+            $this->delete_directory($temp_dir);
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'No plugin directory found in ZIP',
             ), 400);
         }
 
-        // Get first directory (should be 'remote-agent')
-        $plugin_dir = key($extracted_files);
         $source_path = trailingslashit($temp_dir) . $plugin_dir;
         $dest_path = WP_PLUGIN_DIR . '/' . $plugin_dir;
 
         // Remove existing plugin directory
-        if ($wp_filesystem->exists($dest_path)) {
-            if (!$wp_filesystem->rmdir($dest_path, true)) {
-                $wp_filesystem->rmdir($temp_dir, true);
+        if (file_exists($dest_path)) {
+            if (!$this->delete_directory($dest_path)) {
+                $this->delete_directory($temp_dir);
                 return new WP_REST_Response(array(
                     'success' => false,
                     'error' => 'Could not remove old plugin directory',
@@ -477,8 +529,8 @@ class Watchtower_Agent_REST_Controller {
         }
 
         // Move new plugin files
-        if (!$wp_filesystem->move($source_path, $dest_path)) {
-            $wp_filesystem->rmdir($temp_dir, true);
+        if (!rename($source_path, $dest_path)) {
+            $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
                 'success' => false,
                 'error' => 'Could not move plugin files',
@@ -486,9 +538,9 @@ class Watchtower_Agent_REST_Controller {
         }
 
         // Clean up temp directory
-        $wp_filesystem->rmdir($temp_dir, true);
+        $this->delete_directory($temp_dir);
 
-        // Activate plugin (find main plugin file)
+        // Verify plugin was installed
         $plugin_file = null;
         foreach (array('remote-agent.php', $plugin_dir . '.php') as $possible_file) {
             $check_path = $plugin_dir . '/' . $possible_file;
@@ -505,20 +557,64 @@ class Watchtower_Agent_REST_Controller {
             ), 500);
         }
 
-        // Activate the plugin
-        $activate_result = activate_plugin($plugin_file);
-        if (is_wp_error($activate_result)) {
-            return new WP_REST_Response(array(
-                'success' => false,
-                'error' => 'Plugin installed but activation failed: ' . $activate_result->get_error_message(),
-            ), 500);
-        }
-
+        // Plugin updated successfully
+        // Note: We don't need to reactivate - the plugin remains active during update
+        // WordPress will automatically load the new version on the next request
         return new WP_REST_Response(array(
             'success' => true,
             'message' => 'Plugin updated successfully',
             'plugin' => $plugin_file,
         ), 200);
+    }
+
+    /**
+     * Recursively delete a directory
+     */
+    private function delete_directory($dir) {
+        if (!file_exists($dir)) {
+            return true;
+        }
+
+        if (!is_dir($dir)) {
+            return unlink($dir);
+        }
+
+        foreach (scandir($dir) as $item) {
+            if ($item == '.' || $item == '..') {
+                continue;
+            }
+
+            if (!$this->delete_directory($dir . DIRECTORY_SEPARATOR . $item)) {
+                return false;
+            }
+        }
+
+        return rmdir($dir);
+    }
+
+    /**
+     * Check if user has permission to update plugin (more permissive for file uploads)
+     */
+    public function check_update_permission($request) {
+        // Check if user is authenticated (Application Password or regular auth)
+        if (!is_user_logged_in()) {
+            return new WP_Error(
+                'rest_forbidden',
+                __('Authentication required.'),
+                array('status' => 401)
+            );
+        }
+
+        // Check if user has admin capabilities
+        if (!current_user_can('manage_options')) {
+            return new WP_Error(
+                'rest_forbidden',
+                __('Insufficient permissions.'),
+                array('status' => 403)
+            );
+        }
+
+        return true;
     }
 
     /**

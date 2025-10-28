@@ -151,7 +151,8 @@ class Watchtower_Manager_Health_Storage {
     public function fetch_and_save_health($agent) {
         $site_url = $agent['site_url'];
 
-        // Build health endpoint URL using query parameter format (more compatible)
+        // Build info and health endpoint URLs using query parameter format (more compatible)
+        $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
         $health_url = $site_url . '/?rest_route=/watchtower-agent/v1/health';
 
         // For local agents (same WordPress instance), use internal address
@@ -178,12 +179,14 @@ class Watchtower_Manager_Health_Storage {
             );
 
             if (isset($port_to_container[$agent_port])) {
+                $info_url = 'http://' . $port_to_container[$agent_port] . '/?rest_route=/watchtower-agent/v1/info';
                 $health_url = 'http://' . $port_to_container[$agent_port] . '/?rest_route=/watchtower-agent/v1/health';
             }
         }
         // If same host and port, it's local - use internal address
         elseif ($agent_host === $current_host && $agent_port === $current_port) {
             $path = $parsed_agent['path'] ?? '';
+            $info_url = 'http://127.0.0.1' . $path . '/?rest_route=/watchtower-agent/v1/info';
             $health_url = 'http://127.0.0.1' . $path . '/?rest_route=/watchtower-agent/v1/health';
 
             // Add Host header to prevent redirect
@@ -196,6 +199,19 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
+        // First, fetch /info to get agent version
+        $info_response = wp_remote_get($info_url, $request_args);
+        $agent_version = null;
+
+        if (!is_wp_error($info_response)) {
+            $info_body = wp_remote_retrieve_body($info_response);
+            $info_data = json_decode($info_body, true);
+            if ($info_data && isset($info_data['version'])) {
+                $agent_version = $info_data['version'];
+            }
+        }
+
+        // Then fetch /health
         $response = wp_remote_get($health_url, $request_args);
 
         if (is_wp_error($response)) {
@@ -233,10 +249,10 @@ class Watchtower_Manager_Health_Storage {
         }
 
         // Update agent info with static configuration data
-        if (!empty($static_data)) {
+        if (!empty($static_data) || $agent_version) {
             $update_data = array_merge(array('site_url' => $site_url), $static_data);
 
-            // Also save site_name, admin_url, and site_icon to top level for easy access
+            // Also save flattened fields to top level for easy access
             if (isset($static_data['wordpress']['site_name'])) {
                 $update_data['site_name'] = $static_data['wordpress']['site_name'];
             }
@@ -245,6 +261,15 @@ class Watchtower_Manager_Health_Storage {
             }
             if (isset($static_data['wordpress']['site_icon'])) {
                 $update_data['site_icon'] = $static_data['wordpress']['site_icon'];
+            }
+            if (isset($static_data['wordpress']['version'])) {
+                $update_data['wordpress_version'] = $static_data['wordpress']['version'];
+            }
+            if (isset($static_data['php']['version'])) {
+                $update_data['php_version'] = $static_data['php']['version'];
+            }
+            if ($agent_version) {
+                $update_data['agent_version'] = $agent_version;
             }
 
             $agent_storage->save_agent($update_data);
@@ -269,8 +294,11 @@ class Watchtower_Manager_Health_Storage {
 
     /**
      * Check and update agent version if needed
+     *
+     * @param array $agent_data Agent information
+     * @param bool $force_update Force update even if auto-update is disabled (for manual updates)
      */
-    public function check_and_update_agent_version($agent_data) {
+    public function check_and_update_agent_version($agent_data, $force_update = false) {
         $auto_updater = new Watchtower_Manager_Auto_Updater();
 
         if (!$auto_updater->has_bundled_agent()) {
@@ -333,10 +361,10 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // Auto-update is needed - check if auto-update is enabled
+        // Auto-update is needed - check if auto-update is enabled (unless forced)
         $auto_update_enabled = get_option('watchtower_auto_update_agents', false);
 
-        if (!$auto_update_enabled) {
+        if (!$auto_update_enabled && !$force_update) {
             return array(
                 'checked' => true,
                 'needs_update' => true,
@@ -347,7 +375,7 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // Perform auto-update
+        // Perform update (auto or manual)
         $update_result = $auto_updater->update_agent($agent_data);
 
         return array_merge(array(
