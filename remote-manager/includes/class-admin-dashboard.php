@@ -898,10 +898,14 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
+        // Automatically rescan the agent to get the latest version and details
+        $scan_result = $this->health_storage->fetch_and_save_health($agent);
+
         wp_send_json_success(array(
             'message' => 'Agent updated successfully',
             'agent_version' => $result['agent_version'],
-            'bundled_version' => $result['bundled_version']
+            'bundled_version' => $result['bundled_version'],
+            'rescanned' => $scan_result !== false
         ));
     }
 

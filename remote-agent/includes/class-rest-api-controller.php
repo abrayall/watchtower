@@ -59,12 +59,10 @@ class Watchtower_Agent_REST_Controller {
         ));
 
         // Update endpoint - for auto-updating the agent plugin
-        // Note: Made public because permission_callback with Application Passwords is unreliable
-        // Authentication is verified inside the callback function if needed
         register_rest_route($this->namespace, '/update', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_plugin'),
-            'permission_callback' => '__return_true',
+            'permission_callback' => array($this, 'check_permission'),
         ));
     }
 
