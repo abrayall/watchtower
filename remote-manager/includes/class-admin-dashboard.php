@@ -1284,7 +1284,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                 Automatically update agent plugins when a new version is available
                             </label>
                             <p class="description">
-                                When enabled, the manager will automatically update agent plugins during health checks.
+                                When enabled, the manager will automatically update agent plugins during scans and health checks.
                                 The bundled agent version is <?php
                                 $auto_updater = new Watchtower_Manager_Auto_Updater();
                                 echo esc_html($auto_updater->get_bundled_agent_version() ?? 'N/A');
@@ -1625,6 +1625,18 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td><?php echo count($health_data['plugins']['active_plugins'] ?? []); ?> active</td>
                                     </tr>
                                     <?php endif; ?>
+                                    <?php if (isset($agent['password'])): ?>
+                                    <tr>
+                                        <td>Token:</td>
+                                        <td>
+                                            <span id="agent-token-value"><?php echo esc_html($agent['password']); ?></span>
+                                            <button type="button" class="button-link" onclick="copyTokenToClipboard()" style="margin-left: 8px; cursor: pointer; vertical-align: middle; text-decoration: none; outline: none; border: none; background: none; padding: 0;" title="Copy to clipboard">
+                                                <span class="dashicons dashicons-admin-page" style="font-size: 16px; width: 16px; height: 16px; color: #787c82;"></span>
+                                            </button>
+                                            <span id="copy-feedback" style="display: none; color: #00a32a; margin-left: 8px;">Copied!</span>
+                                        </td>
+                                    </tr>
+                                    <?php endif; ?>
                                 </table>
                             </div>
                             <div class="health-status-timestamp">
@@ -1949,6 +1961,48 @@ class Watchtower_Manager_Admin_Dashboard {
             meta.style.display = 'none';
             icon.classList.remove('dashicons-arrow-up-alt2');
             icon.classList.add('dashicons-arrow-down-alt2');
+        }
+    }
+
+    function copyTokenToClipboard() {
+        var tokenElement = document.getElementById('agent-token-value');
+        var feedback = document.getElementById('copy-feedback');
+
+        if (tokenElement) {
+            var tokenValue = tokenElement.textContent || tokenElement.innerText;
+
+            // Use modern clipboard API if available
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                navigator.clipboard.writeText(tokenValue).then(function() {
+                    showCopyFeedback(feedback);
+                }).catch(function(err) {
+                    console.error('Failed to copy token: ', err);
+                });
+            } else {
+                // Fallback for older browsers
+                var textarea = document.createElement('textarea');
+                textarea.value = tokenValue;
+                textarea.style.position = 'fixed';
+                textarea.style.opacity = '0';
+                document.body.appendChild(textarea);
+                textarea.select();
+                try {
+                    document.execCommand('copy');
+                    showCopyFeedback(feedback);
+                } catch (err) {
+                    console.error('Failed to copy token: ', err);
+                }
+                document.body.removeChild(textarea);
+            }
+        }
+    }
+
+    function showCopyFeedback(feedback) {
+        if (feedback) {
+            feedback.style.display = 'inline';
+            setTimeout(function() {
+                feedback.style.display = 'none';
+            }, 2000);
         }
     }
 

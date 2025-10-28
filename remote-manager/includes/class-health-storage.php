@@ -289,6 +289,30 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
+        // Check and update agent version if needed (respects auto-update setting)
+        if ($agent_version) {
+            $update_result = $this->check_and_update_agent_version($agent, false);
+
+            // If agent was updated, re-fetch health data to get new version
+            if (!empty($update_result['auto_updated'])) {
+                // Sleep briefly to allow the agent to fully restart
+                sleep(2);
+
+                // Re-fetch agent info to update version
+                $info_response = wp_remote_get($info_url, $request_args);
+                if (!is_wp_error($info_response)) {
+                    $info_body = wp_remote_retrieve_body($info_response);
+                    $info_data = json_decode($info_body, true);
+                    if ($info_data && isset($info_data['version'])) {
+                        $agent_storage->save_agent(array(
+                            'site_url' => $site_url,
+                            'agent_version' => $info_data['version']
+                        ));
+                    }
+                }
+            }
+        }
+
         return $this->save_health_data($site_url, $dynamic_data);
     }
 
