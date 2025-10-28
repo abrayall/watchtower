@@ -4,7 +4,7 @@
  * Plugin URI: https://github.com/abrayall/watchtower
  * Description: Remote management agent that provides REST API endpoints for WordPress management including user management, backups, and updates. Designed to be controlled by Watchtower Manager.
  * Version: 1.0.0
- * Author: abrayall
+ * Author: Brayall, LLC
  * Author URI: https://github.com/abrayall
  * License: GPL v2 or later
  * License URI: https://www.gnu.org/licenses/gpl-2.0.html
@@ -48,6 +48,7 @@ require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-rest-api-controller.p
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-user-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-backup-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-update-management.php';
+require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-log-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-admin-settings.php';
 
 // Initialize the plugin

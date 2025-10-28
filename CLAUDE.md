@@ -84,8 +84,8 @@ build.bat
 - `build/watchtower-manager-{version}.zip`
 
 ### Current Version
-- **Latest Tag**: `v0.0.1`
-- **Development Version**: `0.0.1-2-{timestamp}`
+- **Latest Tag**: `v0.0.12`
+- **Development Version**: `0.0.12-{timestamp}`
 
 ## Plugin Architecture
 
@@ -99,10 +99,12 @@ watchtower/
 │       ├── class-watchtower-agent.php
 │       ├── class-rest-api-controller.php
 │       ├── class-admin-settings.php
+│       ├── class-metrics-tracker.php
 │       └── endpoints/
 │           ├── class-user-management.php
 │           ├── class-backup-management.php
-│           └── class-update-management.php
+│           ├── class-update-management.php
+│           └── class-log-management.php
 │
 ├── remote-manager/         # Manager plugin
 │   ├── remote-manager.php  # Main plugin file
@@ -395,6 +397,25 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 - Minimum requirements: WordPress 5.8+, PHP 7.4+, MySQL 5.6+
 
 ## Recent Changes
+
+### 2025-10-28 - v0.0.12
+
+1. **UI Enhancements**
+   - Added compact mobile layout for stats filter tiles (3-column horizontal)
+   - Added responsive stacking for table action buttons (< 1400px width)
+   - Added manager version display in dashboard header (right-aligned)
+   - Improved dashboard styling with dynamic color coding for health stats
+   - Added clickable filtering for site health status with toggle behavior
+
+2. **New Features**
+   - Added log management endpoints for agent plugin (`class-log-management.php`)
+   - Added metrics tracker for real-time request monitoring (`class-metrics-tracker.php`)
+   - Added Future Enhancements section to README (Users, Backup, Traffic Stats, Security)
+
+3. **Metadata Updates**
+   - Updated plugin author to "Brayall, LLC" in both plugins
+   - Renamed manager plugin to "Watchtower" in WordPress plugin screen
+   - Updated README author to "Brayall, LLC"
 
 ### 2025-10-27
 
