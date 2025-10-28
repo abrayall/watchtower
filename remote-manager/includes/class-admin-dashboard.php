@@ -43,6 +43,7 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_scan_agent', array($this, 'ajax_scan_agent'));
         add_action('wp_ajax_watchtower_manager_get_logs', array($this, 'ajax_get_logs'));
         add_action('wp_ajax_watchtower_manager_get_available_logs', array($this, 'ajax_get_available_logs'));
+        add_action('wp_ajax_watchtower_manager_toggle_debug', array($this, 'ajax_toggle_debug'));
     }
 
     /**
@@ -777,6 +778,14 @@ class Watchtower_Manager_Admin_Dashboard {
             .progress-fill.critical {
                 background: linear-gradient(90deg, #d63638, #ff4444);
             }
+            .copy-credentials-btn:focus,
+            .copy-credentials-btn:active,
+            .copy-token-btn:focus,
+            .copy-token-btn:active {
+                outline: none !important;
+                border: none !important;
+                box-shadow: none !important;
+            }
         ';
     }
 
@@ -947,6 +956,14 @@ class Watchtower_Manager_Admin_Dashboard {
                                                 }
                                                 echo esc_html($agent['username']);
                                                 ?>
+                                                <button type="button" class="button-link copy-credentials-btn"
+                                                        data-site-url="<?php echo esc_attr($agent['site_url']); ?>"
+                                                        data-username="<?php echo esc_attr($agent['username']); ?>"
+                                                        data-password="<?php echo esc_attr($agent['password']); ?>"
+                                                        style="margin-left: 4px; cursor: pointer; vertical-align: middle; text-decoration: none; outline: none; border: none; background: none; padding: 0;"
+                                                        title="Copy credentials to clipboard">
+                                                    <span class="dashicons dashicons-admin-page" style="font-size: 14px; width: 14px; height: 14px; color: #787c82;"></span>
+                                                </button>
                                             </div>
                                         </td>
                                         <td data-label="Health">
@@ -1248,6 +1265,54 @@ class Watchtower_Manager_Admin_Dashboard {
                     }
                 });
             });
+
+            // Copy credentials to clipboard
+            $('.copy-credentials-btn').on('click', function(e) {
+                e.preventDefault();
+                e.stopPropagation(); // Prevent row click
+                var button = $(this);
+                var siteUrl = button.data('site-url');
+                var username = button.data('username');
+                var password = button.data('password');
+
+                var credentials = 'url: ' + siteUrl + ', user: ' + username + ', password: ' + password;
+
+                // Use modern clipboard API if available
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    navigator.clipboard.writeText(credentials).then(function() {
+                        // Show visual feedback
+                        var icon = button.find('.dashicons');
+                        var originalColor = icon.css('color');
+                        icon.css('color', '#00a32a');
+                        setTimeout(function() {
+                            icon.css('color', originalColor);
+                        }, 1000);
+                    }).catch(function(err) {
+                        console.error('Failed to copy credentials: ', err);
+                    });
+                } else {
+                    // Fallback for older browsers
+                    var textarea = document.createElement('textarea');
+                    textarea.value = credentials;
+                    textarea.style.position = 'fixed';
+                    textarea.style.opacity = '0';
+                    document.body.appendChild(textarea);
+                    textarea.select();
+                    try {
+                        document.execCommand('copy');
+                        // Show visual feedback
+                        var icon = button.find('.dashicons');
+                        var originalColor = icon.css('color');
+                        icon.css('color', '#00a32a');
+                        setTimeout(function() {
+                            icon.css('color', originalColor);
+                        }, 1000);
+                    } catch (err) {
+                        console.error('Failed to copy credentials: ', err);
+                    }
+                    document.body.removeChild(textarea);
+                }
+            });
         });
         </script>
         <?php
@@ -1284,7 +1349,8 @@ class Watchtower_Manager_Admin_Dashboard {
                                 Automatically update agent plugins when a new version is available
                             </label>
                             <p class="description">
-                                When enabled, the manager will automatically update agent plugins during scans and health checks.
+                                When enabled, the manager will automatically update agent plugins during automatic health checks.
+                                Manual scans always update agents to the latest version.
                                 The bundled agent version is <?php
                                 $auto_updater = new Watchtower_Manager_Auto_Updater();
                                 echo esc_html($auto_updater->get_bundled_agent_version() ?? 'N/A');
@@ -1486,6 +1552,55 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     /**
+     * Handle toggle debug AJAX request
+     */
+    public function ajax_toggle_debug() {
+        check_ajax_referer('watchtower_manager_toggle_debug', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $enabled = isset($_POST['enabled']) && $_POST['enabled'] === 'true';
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Call agent's /debug endpoint
+        $response = wp_remote_post(
+            $site_url . '/?rest_route=/watchtower-agent/v1/debug',
+            array(
+                'headers' => array(
+                    'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                    'Content-Type' => 'application/json',
+                ),
+                'body' => json_encode(array('enabled' => $enabled)),
+                'timeout' => 30,
+                'sslverify' => false,
+            )
+        );
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($data && isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
+        }
+    }
+
+    /**
      * Determine overall health status
      */
     private function determine_health_status($health_data) {
@@ -1630,7 +1745,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td>Token:</td>
                                         <td>
                                             <span id="agent-token-value"><?php echo esc_html($agent['password']); ?></span>
-                                            <button type="button" class="button-link" onclick="copyTokenToClipboard()" style="margin-left: 8px; cursor: pointer; vertical-align: middle; text-decoration: none; outline: none; border: none; background: none; padding: 0;" title="Copy to clipboard">
+                                            <button type="button" class="button-link copy-token-btn" onclick="copyTokenToClipboard()" style="margin-left: 8px; cursor: pointer; vertical-align: middle; text-decoration: none; outline: none; border: none; background: none; padding: 0;" title="Copy to clipboard">
                                                 <span class="dashicons dashicons-admin-page" style="font-size: 16px; width: 16px; height: 16px; color: #787c82;"></span>
                                             </button>
                                             <span id="copy-feedback" style="display: none; color: #00a32a; margin-left: 8px;">Copied!</span>
@@ -1935,6 +2050,16 @@ class Watchtower_Manager_Admin_Dashboard {
                         <button class="button button-secondary" onclick="location.reload();">
                             <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Scan
                         </button>
+                        <?php
+                        // Check if debug mode is enabled
+                        $debug_enabled = false;
+                        if (isset($agent['constants']) && isset($agent['constants']['WP_DEBUG_LOG'])) {
+                            $debug_enabled = $agent['constants']['WP_DEBUG_LOG'];
+                        }
+                        ?>
+                        <button class="button watchtower-toggle-debug-btn" data-site-url="<?php echo esc_attr($site_url); ?>" data-debug-enabled="<?php echo $debug_enabled ? '1' : '0'; ?>">
+                            <span class="dashicons dashicons-<?php echo $debug_enabled ? 'no' : 'yes'; ?>" style="margin-top: 3px;"></span> <?php echo $debug_enabled ? 'Disable' : 'Enable'; ?> Debug
+                        </button>
                         <a href="<?php echo esc_url($site_url . '/wp-json/watchtower-agent/v1/info'); ?>" class="button" target="_blank">
                             View Agent Info (JSON)
                         </a>
@@ -2034,6 +2159,40 @@ class Watchtower_Manager_Admin_Dashboard {
             }).fail(function() {
                 alert('Update request failed. Please try again.');
                 button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+            });
+        });
+
+        // Toggle debug mode
+        $('.watchtower-toggle-debug-btn').on('click', function() {
+            var button = $(this);
+            var siteUrl = button.data('site-url');
+            var debugEnabled = button.data('debug-enabled') === 1;
+            var newState = !debugEnabled;
+
+            if (!confirm('Are you sure you want to ' + (newState ? 'enable' : 'disable') + ' debug mode on this site?')) {
+                return;
+            }
+
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_toggle_debug',
+                site_url: siteUrl,
+                enabled: newState,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_toggle_debug'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> ' + (newState ? 'Debug Enabled!' : 'Debug Disabled!')).css('color', '#00a32a');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 2000);
+                } else {
+                    alert('Failed to toggle debug mode: ' + (response.data.message || 'Unknown error'));
+                    button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
+                }
+            }).fail(function() {
+                alert('Request failed. Please try again.');
+                button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
             });
         });
 

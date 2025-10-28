@@ -289,9 +289,9 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Check and update agent version if needed (respects auto-update setting)
+        // Check and update agent version if needed (forced during manual scans)
         if ($agent_version) {
-            $update_result = $this->check_and_update_agent_version($agent, false);
+            $update_result = $this->check_and_update_agent_version($agent, true);
 
             // If agent was updated, re-fetch health data to get new version
             if (!empty($update_result['auto_updated'])) {
