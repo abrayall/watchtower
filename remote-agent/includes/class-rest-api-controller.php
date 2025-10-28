@@ -519,23 +519,12 @@ class Watchtower_Agent_REST_Controller {
         $source_path = trailingslashit($temp_dir) . $plugin_dir;
         $dest_path = WP_PLUGIN_DIR . '/' . $plugin_dir;
 
-        // Remove existing plugin directory
-        if (file_exists($dest_path)) {
-            if (!$this->delete_directory($dest_path)) {
-                $this->delete_directory($temp_dir);
-                return new WP_REST_Response(array(
-                    'success' => false,
-                    'error' => 'Could not remove old plugin directory',
-                ), 500);
-            }
-        }
-
-        // Move new plugin files
-        if (!rename($source_path, $dest_path)) {
+        // Instead of deleting and moving, copy over files (safer for active plugins)
+        if (!$this->copy_directory($source_path, $dest_path)) {
             $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
                 'success' => false,
-                'error' => 'Could not move plugin files',
+                'error' => 'Could not copy plugin files',
             ), 500);
         }
 
@@ -567,6 +556,44 @@ class Watchtower_Agent_REST_Controller {
             'message' => 'Plugin updated successfully',
             'plugin' => $plugin_file,
         ), 200);
+    }
+
+    /**
+     * Recursively copy a directory
+     */
+    private function copy_directory($source, $dest) {
+        // Create destination directory if it doesn't exist
+        if (!file_exists($dest)) {
+            if (!wp_mkdir_p($dest)) {
+                return false;
+            }
+        }
+
+        // Get directory contents
+        $items = scandir($source);
+
+        foreach ($items as $item) {
+            if ($item == '.' || $item == '..') {
+                continue;
+            }
+
+            $source_item = $source . DIRECTORY_SEPARATOR . $item;
+            $dest_item = $dest . DIRECTORY_SEPARATOR . $item;
+
+            if (is_dir($source_item)) {
+                // Recursively copy subdirectory
+                if (!$this->copy_directory($source_item, $dest_item)) {
+                    return false;
+                }
+            } else {
+                // Copy file, overwriting if exists
+                if (!copy($source_item, $dest_item)) {
+                    return false;
+                }
+            }
+        }
+
+        return true;
     }
 
     /**

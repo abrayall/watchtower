@@ -406,13 +406,29 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
    - Added manager version display in dashboard header (right-aligned)
    - Improved dashboard styling with dynamic color coding for health stats
    - Added clickable filtering for site health status with toggle behavior
+   - Added Token display with copy-to-clipboard icon on site details page
 
 2. **New Features**
    - Added log management endpoints for agent plugin (`class-log-management.php`)
    - Added metrics tracker for real-time request monitoring (`class-metrics-tracker.php`)
    - Added Future Enhancements section to README (Users, Backup, Traffic Stats, Security)
+   - Added auto-update agents during health scans (respects auto-update setting)
 
-3. **Metadata Updates**
+3. **Wordfence Compatibility**
+   - Fixed Application Password authentication blocked by Wordfence Security
+   - Agent plugin automatically detects and disables `loginSec_disableApplicationPasswords`
+   - Works regardless of installation order (agent before/after Wordfence)
+   - Automatically recovers if Wordfence setting is re-enabled
+   - Runs on Application Password filters - zero performance impact when not using auth
+   - Prevents 401 authentication errors on sites with Wordfence installed
+   - See `watchtower_agent_check_wordfence_app_password_block()` function (remote-agent.php:337-377)
+
+4. **Plugin Update System Improvements**
+   - Changed from delete-and-move to copy-over strategy for plugin updates
+   - Prevents "Could not remove old plugin directory" errors
+   - More reliable for updating active plugins in production
+
+5. **Metadata Updates**
    - Updated plugin author to "Brayall, LLC" in both plugins
    - Renamed manager plugin to "Watchtower" in WordPress plugin screen
    - Updated README author to "Brayall, LLC"

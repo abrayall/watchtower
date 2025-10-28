@@ -72,11 +72,45 @@ function watchtower_agent_add_settings_link($links) {
     return $links;
 }
 
+// Enable Application Passwords if they're disabled
+add_filter('wp_is_application_passwords_available', 'watchtower_agent_enable_app_passwords');
+function watchtower_agent_enable_app_passwords($available) {
+    // Check if Wordfence is blocking Application Passwords and disable it
+    watchtower_agent_check_wordfence_app_password_block();
+
+    // Force enable Application Passwords for this plugin to work
+    return true;
+}
+
+// Enable Application Passwords for the REST API
+add_filter('application_password_is_api_request', 'watchtower_agent_enable_app_passwords_api', 10, 1);
+function watchtower_agent_enable_app_passwords_api($is_api_request) {
+    // Check if Wordfence is blocking Application Passwords and disable it
+    watchtower_agent_check_wordfence_app_password_block();
+
+    // Check if this is a Watchtower request
+    if (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], 'watchtower-agent') !== false) {
+        return true;
+    }
+    return $is_api_request;
+}
+
 // Activation hook
 register_activation_hook(__FILE__, 'watchtower_agent_activate');
 function watchtower_agent_activate() {
     // Flush rewrite rules
     flush_rewrite_rules();
+
+    // Check if Application Passwords are available
+    $app_passwords_available = wp_is_application_passwords_available();
+
+    if (!$app_passwords_available) {
+        // Try to enable via wp-config.php if possible
+        watchtower_agent_enable_app_passwords_in_config();
+    }
+
+    // Check if Wordfence is blocking Application Passwords and disable it
+    watchtower_agent_check_wordfence_app_password_block();
 
     // Generate application password for the first admin user
     require_once ABSPATH . 'wp-admin/includes/user.php';
@@ -242,4 +276,102 @@ register_deactivation_hook(__FILE__, 'watchtower_agent_deactivate');
 function watchtower_agent_deactivate() {
     // Flush rewrite rules
     flush_rewrite_rules();
+}
+
+/**
+ * Try to enable Application Passwords in wp-config.php
+ */
+function watchtower_agent_enable_app_passwords_in_config() {
+    // Find wp-config.php
+    $config_file = null;
+
+    // Try standard location
+    if (file_exists(ABSPATH . 'wp-config.php')) {
+        $config_file = ABSPATH . 'wp-config.php';
+    }
+    // Try one level up (for WordPress in subdirectory)
+    elseif (file_exists(dirname(ABSPATH) . '/wp-config.php')) {
+        $config_file = dirname(ABSPATH) . '/wp-config.php';
+    }
+
+    if (!$config_file || !is_writable($config_file)) {
+        error_log('Watchtower Agent: Cannot enable Application Passwords - wp-config.php not writable');
+        return false;
+    }
+
+    $config_content = file_get_contents($config_file);
+
+    if ($config_content === false) {
+        error_log('Watchtower Agent: Cannot read wp-config.php');
+        return false;
+    }
+
+    // Check if WP_APPLICATION_PASSWORDS is set to false
+    if (preg_match("/define\s*\(\s*['\"]WP_APPLICATION_PASSWORDS['\"]\s*,\s*false\s*\)/i", $config_content)) {
+        // Remove or comment out the line that disables Application Passwords
+        $config_content = preg_replace(
+            "/define\s*\(\s*['\"]WP_APPLICATION_PASSWORDS['\"]\s*,\s*false\s*\)\s*;/i",
+            "// define( 'WP_APPLICATION_PASSWORDS', false ); // Disabled by Watchtower Agent",
+            $config_content
+        );
+
+        // Write back to file
+        $result = file_put_contents($config_file, $config_content);
+
+        if ($result !== false) {
+            error_log('Watchtower Agent: Successfully enabled Application Passwords in wp-config.php');
+            return true;
+        } else {
+            error_log('Watchtower Agent: Failed to write changes to wp-config.php');
+            return false;
+        }
+    }
+
+    return true; // Already enabled or not disabled
+}
+
+/**
+ * Check if Wordfence is blocking Application Passwords and disable it
+ * Uses static variable to avoid redundant checks during the same request
+ */
+function watchtower_agent_check_wordfence_app_password_block() {
+    // Use static variable to avoid checking multiple times per request
+    static $checked = false;
+    if ($checked) {
+        return false;
+    }
+    $checked = true;
+
+    // Check if Wordfence is installed and active
+    if (!is_plugin_active('wordfence/wordfence.php')) {
+        return false; // Wordfence not active
+    }
+
+    // Check if Wordfence classes are loaded
+    if (!class_exists('wfConfig')) {
+        // Try to load Wordfence
+        $wordfence_file = WP_PLUGIN_DIR . '/wordfence/wordfence.php';
+        if (file_exists($wordfence_file)) {
+            require_once $wordfence_file;
+        } else {
+            return false;
+        }
+    }
+
+    // Check if wfConfig class is available
+    if (!class_exists('wfConfig')) {
+        return false;
+    }
+
+    // Check if Wordfence is blocking Application Passwords
+    $is_blocked = wfConfig::get('loginSec_disableApplicationPasswords');
+
+    if ($is_blocked) {
+        // Disable the blocking
+        wfConfig::set('loginSec_disableApplicationPasswords', 0);
+        error_log('Watchtower Agent: Disabled Wordfence Application Password blocking (loginSec_disableApplicationPasswords)');
+        return true;
+    }
+
+    return false; // Already disabled
 }
