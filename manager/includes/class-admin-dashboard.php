@@ -15,16 +15,16 @@ class Watchtower_Manager_Admin_Dashboard {
     private $storage;
 
     /**
-     * Health storage instance
+     * Site storage instance
      */
-    private $health_storage;
+    private $site_storage;
 
     /**
      * Constructor
      */
     public function __construct() {
         $this->storage = new Watchtower_Manager_Agent_Storage();
-        $this->health_storage = new Watchtower_Manager_Health_Storage();
+        $this->site_storage = new Watchtower_Manager_Site_Storage();
     }
 
     /**
@@ -120,7 +120,7 @@ class Watchtower_Manager_Admin_Dashboard {
                 true
             );
 
-            wp_localize_script('watchtower-details', 'watchtower', array(
+            wp_localize_script('watchtower-details', 'context', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('watchtower_manager_nonce'),
                 'siteUrl' => $_GET['site']
@@ -141,7 +141,7 @@ class Watchtower_Manager_Admin_Dashboard {
                 true
             );
 
-            wp_localize_script('watchtower-dashboard', 'watchtower', array(
+            wp_localize_script('watchtower-dashboard', 'context', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('watchtower_manager_nonce')
             ));
@@ -161,7 +161,7 @@ class Watchtower_Manager_Admin_Dashboard {
         $agents_with_health = array();
 
         foreach ($agents as $agent) {
-            $health_data = $this->health_storage->get_health_data($agent['site_url']);
+            $health_data = $this->site_storage->get_health_data($agent['site_url']);
             $health_status = $this->determine_health_status($health_data);
 
             $agent['health_status'] = $health_status;
@@ -282,7 +282,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <?php
                                     $details_url = add_query_arg(array(
                                         'page' => 'watchtower-manager-site-details',
-                                        'site_url' => urlencode($agent['site_url'])
+                                        'site' => urlencode($agent['site_url'])
                                     ), admin_url('admin.php'));
                                     ?>
                                     <tr data-site-index="<?php echo $index; ?>" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $agent['health_status']; ?>" class="clickable-row site-row">
@@ -348,7 +348,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td data-label="Agent"><?php echo esc_html($agent['agent_version']); ?></td>
                                         <td data-label="Scanned">
                                             <?php
-                                            $health_age = $this->health_storage->get_health_data_age($agent['site_url']);
+                                            $health_age = $this->site_storage->get_health_data_age($agent['site_url']);
                                             if ($health_age !== null) {
                                                 echo $health_age < 60 ? 'just now' : human_time_diff(current_time('timestamp') - $health_age, current_time('timestamp')) . ' ago';
                                             } else {
@@ -360,7 +360,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                             <div class="actions">
                                                 <a href="<?php echo esc_url(add_query_arg(array(
                                                     'page' => 'watchtower-manager-site-details',
-                                                    'site_url' => urlencode($agent['site_url'])
+                                                    'site' => urlencode($agent['site_url'])
                                                 ), admin_url('admin.php'))); ?>"
                                                    class="button button-small button-primary">
                                                     Details
@@ -404,7 +404,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                 'site_url' => urlencode($agent['site_url'])
                             ), admin_url('admin.php'));
                             $health_status = $agent['health_status'];
-                            $health_age = $this->health_storage->get_health_data_age($agent['site_url']);
+                            $health_age = $this->site_storage->get_health_data_age($agent['site_url']);
                             ?>
                             <div class="mobile-site-tile site-row" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $health_status; ?>" onclick="window.location.href='<?php echo esc_url($details_url); ?>'">
                                 <div class="mobile-site-header">
@@ -543,7 +543,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Remove agent
      */
     public function ajax_remove_agent() {
-        check_ajax_referer('watchtower_manager_remove', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -563,7 +563,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Update agent
      */
     public function ajax_update_agent() {
-        check_ajax_referer('watchtower_manager_update_agent', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -577,7 +577,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $result = $this->health_storage->check_and_update_agent_version($agent, true);
+        $result = $this->site_storage->check_and_update_agent_version($agent, true);
 
         if (!isset($result['checked']) || !$result['checked']) {
             $error = isset($result['error']) ? $result['error'] : 'Failed to check agent version';
@@ -599,7 +599,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $scan_result = $this->health_storage->fetch_and_save_health($agent);
+        $scan_result = $this->site_storage->fetch_and_save_health($agent);
 
         wp_send_json_success(array(
             'message' => 'Agent updated successfully',
@@ -613,7 +613,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Scan agent (fetch and save /info and /health data)
      */
     public function ajax_scan_agent() {
-        check_ajax_referer('watchtower_manager_scan', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -627,7 +627,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $result = $this->health_storage->fetch_and_save_health($agent);
+        $result = $this->site_storage->fetch_and_save_health($agent);
 
         if (!$result) {
             wp_send_json_error(array('message' => 'Failed to scan site'));
@@ -643,7 +643,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Get available logs for an agent
      */
     public function ajax_get_available_logs() {
-        check_ajax_referer('watchtower_manager_logs', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -682,7 +682,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Get logs for an agent
      */
     public function ajax_get_logs() {
-        check_ajax_referer('watchtower_manager_logs', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -727,7 +727,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * Handle toggle debug AJAX request
      */
     public function ajax_toggle_debug() {
-        check_ajax_referer('watchtower_manager_toggle_debug', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -777,7 +777,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Get backups for an agent
      */
     public function ajax_get_backups() {
-        check_ajax_referer('watchtower_manager_backups', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -791,7 +791,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $backups_data = $this->health_storage->get_backups_data($site_url);
+        $backups_data = $this->site_storage->get_backups_data($site_url);
 
         if (!$backups_data || !isset($backups_data['fetched_at'])) {
             $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
@@ -849,7 +849,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Create backup
      */
     public function ajax_create_backup() {
-        check_ajax_referer('watchtower_manager_backups', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -894,7 +894,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Restore backup
      */
     public function ajax_restore_backup() {
-        check_ajax_referer('watchtower_manager_backups', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -956,7 +956,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Get restore status
      */
     public function ajax_get_restore_status() {
-        check_ajax_referer('watchtower_manager_backups', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -999,7 +999,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX: Delete backup
      */
     public function ajax_delete_backup() {
-        check_ajax_referer('watchtower_manager_backups', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -1045,7 +1045,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX handler to get agent information
      */
     public function ajax_get_agent() {
-        check_ajax_referer('watchtower_manager_get_agent', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -1072,7 +1072,7 @@ class Watchtower_Manager_Admin_Dashboard {
      * AJAX handler to get activity logs from agent
      */
     public function ajax_get_activity_logs() {
-        check_ajax_referer('watchtower_manager_get_activity_logs', 'nonce');
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
 
         if (!current_user_can('manage_options')) {
             wp_send_json_error(array('message' => 'Permission denied'));
@@ -1174,23 +1174,23 @@ class Watchtower_Manager_Admin_Dashboard {
      * Render site details page
      */
     public function render_site_details() {
-    if (!isset($_GET['site_url'])) {
+    if (!isset($_GET['site'])) {
         wp_die('Site URL parameter missing');
     }
 
-    $site_url = urldecode($_GET['site_url']);
+    $site_url = urldecode($_GET['site']);
     $agent = $this->storage->get_agent_by_url($site_url);
 
     if (!$agent) {
         wp_die('Agent not found');
     }
 
-    $health_data = $this->health_storage->get_health_data($site_url);
-    $health_age = $this->health_storage->get_health_data_age($site_url);
+    $health_data = $this->site_storage->get_health_data($site_url);
+    $health_age = $this->site_storage->get_health_data_age($site_url);
 
-    if ($this->health_storage->is_health_data_stale($site_url)) {
-        $this->health_storage->fetch_and_save_health($agent);
-        $health_data = $this->health_storage->get_health_data($site_url);
+    if ($this->site_storage->is_health_data_stale($site_url)) {
+        $this->site_storage->fetch_and_save_health($agent);
+        $health_data = $this->site_storage->get_health_data($site_url);
         $health_age = 0;
     }
 
