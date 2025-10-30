@@ -79,16 +79,16 @@ echo ""
 
 # Build Agent Plugin
 echo -e "${BLUE}Building Watchtower Agent plugin...${NC}"
-AGENT_DIR="$BUILD_DIR/remote-agent"
+AGENT_DIR="$BUILD_DIR/watchtower-agent"
 mkdir -p "$AGENT_DIR"
 
 # Copy agent files
-cp -r remote-agent/* "$AGENT_DIR/"
+cp -r agent/* "$AGENT_DIR/"
 cp "$VERSION_FILE" "$AGENT_DIR/"
 
 # Update version in plugin header
-sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$AGENT_DIR/remote-agent.php"
-rm -f "$AGENT_DIR/remote-agent.php.bak"
+sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$AGENT_DIR/agent.php"
+rm -f "$AGENT_DIR/agent.php.bak"
 
 # Remove development files
 find "$AGENT_DIR" -name ".DS_Store" -delete
@@ -98,7 +98,7 @@ find "$AGENT_DIR" -name "*~" -delete
 
 # Create ZIP
 cd "$BUILD_DIR"
-zip -r "watchtower-agent-${VERSION}.zip" remote-agent/ -q
+zip -r "watchtower-agent-${VERSION}.zip" watchtower-agent/ -q
 echo -e "${GREEN}✓ Created: watchtower-agent-${VERSION}.zip${NC}"
 
 # Store agent ZIP for bundling with manager
@@ -107,16 +107,16 @@ AGENT_ZIP="watchtower-agent-${VERSION}.zip"
 # Build Manager Plugin
 echo ""
 echo -e "${BLUE}Building Watchtower Manager plugin...${NC}"
-MANAGER_DIR="$BUILD_DIR/remote-manager"
+MANAGER_DIR="$BUILD_DIR/watchtower-manager"
 mkdir -p "$MANAGER_DIR"
 
 # Copy manager files
-cp -r "$SCRIPT_DIR/remote-manager/"* "$MANAGER_DIR/"
+cp -r "$SCRIPT_DIR/manager/"* "$MANAGER_DIR/"
 cp "$VERSION_FILE" "$MANAGER_DIR/"
 
 # Update version in plugin header
-sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$MANAGER_DIR/remote-manager.php"
-rm -f "$MANAGER_DIR/remote-manager.php.bak"
+sed -i.bak "s/\* Version: .*/\* Version: ${VERSION}/" "$MANAGER_DIR/manager.php"
+rm -f "$MANAGER_DIR/manager.php.bak"
 
 # Create assets directory and bundle agent plugin
 mkdir -p "$MANAGER_DIR/assets"
@@ -130,13 +130,13 @@ find "$MANAGER_DIR" -name "*.swo" -delete
 find "$MANAGER_DIR" -name "*~" -delete
 
 # Create ZIP
-zip -r "watchtower-manager-${VERSION}.zip" remote-manager/ -q
+zip -r "watchtower-manager-${VERSION}.zip" watchtower-manager/ -q
 echo -e "${GREEN}✓ Created: watchtower-manager-${VERSION}.zip${NC}"
 
 # Clean up temporary directories
 cd "$SCRIPT_DIR"
-rm -rf "$BUILD_DIR/remote-agent"
-rm -rf "$BUILD_DIR/remote-manager"
+rm -rf "$BUILD_DIR/watchtower-agent"
+rm -rf "$BUILD_DIR/watchtower-manager"
 
 # Summary
 echo ""

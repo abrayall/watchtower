@@ -42,7 +42,44 @@ define('WATCHTOWER_MANAGER_VERSION', watchtower_manager_get_version());
 define('WATCHTOWER_MANAGER_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WATCHTOWER_MANAGER_PLUGIN_URL', plugin_dir_url(__FILE__));
 // Store data outside plugin directory so it persists across updates
-define('WATCHTOWER_MANAGER_DATA_DIR', WP_CONTENT_DIR . '/watchtower-manager/');
+define('WATCHTOWER_MANAGER_DATA_DIR', WP_CONTENT_DIR . '/watchtower/manager/');
+
+/**
+ * Helper: Translate site URL to Docker container URL if needed
+ *
+ * This function handles the translation of localhost URLs with non-standard ports
+ * to internal Docker container names. This is necessary when the manager plugin
+ * needs to communicate with agent plugins that are running in separate Docker containers.
+ *
+ * @param string $site_url The original site URL (e.g., http://localhost:8083)
+ * @param string $endpoint The REST endpoint path (e.g., /watchtower-agent/v1/backups)
+ * @return string The translated URL for API calls
+ */
+function watchtower_manager_translate_agent_url($site_url, $endpoint) {
+    // Build the full endpoint URL
+    $full_url = $site_url . '/?rest_route=' . $endpoint;
+
+    // Parse the site URL
+    $parsed = parse_url($site_url);
+    $host = $parsed['host'] ?? '';
+    $port = $parsed['port'] ?? ($parsed['scheme'] === 'https' ? 443 : 80);
+
+    // Check if this is a localhost URL with non-standard port
+    if ($host === 'localhost' && $port !== 80 && $port !== 443) {
+        // Map localhost ports to Docker container names
+        $port_to_container = array(
+            '8083' => 'watchtower_agent_site',
+            '8082' => 'watchtower_manager_site',
+        );
+
+        // If we have a container mapping, translate the URL
+        if (isset($port_to_container[$port])) {
+            $full_url = 'http://' . $port_to_container[$port] . '/?rest_route=' . $endpoint;
+        }
+    }
+
+    return $full_url;
+}
 
 // Load plugin classes
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-watchtower-manager.php';

@@ -41,6 +41,10 @@ class Watchtower_Agent_REST_Controller {
         $log_management = new Watchtower_Agent_Log_Management($this->namespace);
         $log_management->register_routes();
 
+        // Audit endpoints
+        $audit_endpoint = new WP_Remote_Agent_Audit_Endpoint($this->namespace);
+        $audit_endpoint->register_routes();
+
         // Info endpoint (public)
         register_rest_route($this->namespace, '/info', array(
             'methods' => WP_REST_Server::READABLE,
@@ -533,7 +537,7 @@ class Watchtower_Agent_REST_Controller {
 
         // Verify plugin was installed
         $plugin_file = null;
-        foreach (array('remote-agent.php', $plugin_dir . '.php') as $possible_file) {
+        foreach (array('agent.php', $plugin_dir . '.php') as $possible_file) {
             $check_path = $plugin_dir . '/' . $possible_file;
             if (file_exists(WP_PLUGIN_DIR . '/' . $check_path)) {
                 $plugin_file = $check_path;

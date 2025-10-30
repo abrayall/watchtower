@@ -44,6 +44,13 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_get_logs', array($this, 'ajax_get_logs'));
         add_action('wp_ajax_watchtower_manager_get_available_logs', array($this, 'ajax_get_available_logs'));
         add_action('wp_ajax_watchtower_manager_toggle_debug', array($this, 'ajax_toggle_debug'));
+        add_action('wp_ajax_watchtower_manager_get_backups', array($this, 'ajax_get_backups'));
+        add_action('wp_ajax_watchtower_manager_create_backup', array($this, 'ajax_create_backup'));
+        add_action('wp_ajax_watchtower_manager_restore_backup', array($this, 'ajax_restore_backup'));
+        add_action('wp_ajax_watchtower_manager_get_restore_status', array($this, 'ajax_get_restore_status'));
+        add_action('wp_ajax_watchtower_manager_delete_backup', array($this, 'ajax_delete_backup'));
+        add_action('wp_ajax_watchtower_manager_get_agent', array($this, 'ajax_get_agent'));
+        add_action('wp_ajax_watchtower_manager_get_activity_logs', array($this, 'ajax_get_activity_logs'));
     }
 
     /**
@@ -101,6 +108,10 @@ class Watchtower_Manager_Admin_Dashboard {
 
         // Enqueue WordPress default styles
         wp_enqueue_style('wp-color-picker');
+
+        // Enqueue jQuery UI for datepicker
+        wp_enqueue_script('jquery-ui-datepicker');
+        wp_enqueue_style('jquery-ui-css', 'https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.min.css');
 
         // Add inline CSS
         wp_add_inline_style('wp-admin', $this->get_admin_css());
@@ -785,6 +796,21 @@ class Watchtower_Manager_Admin_Dashboard {
                 outline: none !important;
                 border: none !important;
                 box-shadow: none !important;
+            }
+            .backup-component-badge {
+                display: inline-block;
+                padding: 3px 8px;
+                margin: 2px;
+                background: #f0f0f1;
+                border-radius: 3px;
+                font-size: 11px;
+                font-weight: 500;
+                color: #2c3338;
+                text-transform: capitalize;
+            }
+            .backup-component-badge:first-child {
+                background: #e5f5fa;
+                color: #007cba;
             }
         ';
     }
@@ -1487,8 +1513,11 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
+        // Get translated URL for logs endpoint
+        $logs_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/logs');
+
         // Call agent's /logs endpoint to get available logs
-        $response = wp_remote_get($site_url . '/?rest_route=/watchtower-agent/v1/logs', array(
+        $response = wp_remote_get($logs_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
             ),
@@ -1528,9 +1557,12 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
+        // Get translated URL for logs endpoint (with query parameter)
+        $logs_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/logs/' . $log_type) . '&lines=' . $lines;
+
         // Call agent's /logs/{type} endpoint
         $response = wp_remote_get(
-            $site_url . '/?rest_route=/watchtower-agent/v1/logs/' . $log_type . '&lines=' . $lines,
+            $logs_url,
             array(
                 'headers' => array(
                     'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1571,9 +1603,12 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
+        // Get translated URL for debug endpoint
+        $debug_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/debug');
+
         // Call agent's /debug endpoint
         $response = wp_remote_post(
-            $site_url . '/?rest_route=/watchtower-agent/v1/debug',
+            $debug_url,
             array(
                 'headers' => array(
                     'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1598,6 +1633,385 @@ class Watchtower_Manager_Admin_Dashboard {
         } else {
             wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
         }
+    }
+
+    /**
+     * AJAX: Get backups for an agent
+     */
+    public function ajax_get_backups() {
+        check_ajax_referer('watchtower_manager_backups', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Try to get cached backups data first
+        $backups_data = $this->health_storage->get_backups_data($site_url);
+
+        // If no cached data or cache is stale (older than 5 minutes), fetch fresh data
+        if (!$backups_data || !isset($backups_data['fetched_at'])) {
+            // Fetch from agent
+            $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
+        } else {
+            // Check if data is stale
+            $fetched_time = strtotime($backups_data['fetched_at']);
+            $current_time = current_time('timestamp');
+            $age_seconds = $current_time - $fetched_time;
+
+            if ($age_seconds > 300) { // 5 minutes
+                // Fetch fresh data
+                $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
+            }
+        }
+
+        wp_send_json_success($backups_data);
+    }
+
+    /**
+     * Fetch backups data from agent
+     */
+    private function fetch_backups_from_agent($site_url, $agent) {
+        // Get translated URL for backups endpoint
+        $backups_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups');
+
+        // Call agent's /backups endpoint
+        $response = wp_remote_get($backups_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'timeout' => 15,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            return array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+                'fetched_at' => current_time('mysql'),
+            );
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+                'fetched_at' => current_time('mysql'),
+            );
+        }
+
+        $data['fetched_at'] = current_time('mysql');
+        return $data;
+    }
+
+    /**
+     * AJAX: Create backup
+     */
+    public function ajax_create_backup() {
+        check_ajax_referer('watchtower_manager_backups', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Get translated URL for backup endpoint
+        $backup_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backup');
+
+        // Call agent's /backup endpoint
+        $response = wp_remote_post($backup_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array('type' => 'full')),
+            'timeout' => 30,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($data && isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
+        }
+    }
+
+    /**
+     * AJAX: Restore backup
+     */
+    public function ajax_restore_backup() {
+        check_ajax_referer('watchtower_manager_backups', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $backup_id = intval($_POST['backup_id']);
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Get translated URL for restore endpoint
+        $restore_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore');
+
+        // Call agent's /restore endpoint
+        // Note: Restore runs synchronously and can take several minutes
+        $response = wp_remote_post($restore_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array('id' => $backup_id)),
+            'timeout' => 300, // 5 minutes for restore to complete
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            error_log('Watchtower Manager: Restore request failed: ' . $response->get_error_message());
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $status_code = wp_remote_retrieve_response_code($response);
+        $body = wp_remote_retrieve_body($response);
+
+        error_log('Watchtower Manager: Restore response status: ' . $status_code);
+        error_log('Watchtower Manager: Restore response body: ' . substr($body, 0, 500));
+
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid JSON response from agent. Status: ' . $status_code));
+            return;
+        }
+
+        if (isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            $error_msg = isset($data['error']) ? $data['error'] : 'Unknown error';
+            if (isset($data['message'])) {
+                $error_msg = $data['message'];
+            }
+            wp_send_json_error(array('message' => $error_msg));
+        }
+    }
+
+    /**
+     * AJAX: Get restore status
+     */
+    public function ajax_get_restore_status() {
+        check_ajax_referer('watchtower_manager_backups', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Get translated URL for restore status endpoint
+        $status_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore/status');
+
+        // Call agent's /restore/status endpoint
+        $response = wp_remote_get($status_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'timeout' => 15,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($data && isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
+        }
+    }
+
+    /**
+     * AJAX: Delete backup
+     */
+    public function ajax_delete_backup() {
+        check_ajax_referer('watchtower_manager_backups', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site_url']);
+        $backup_id = intval($_POST['backup_id']);
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Get translated URL for delete endpoint (includes backup ID in path)
+        $delete_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups/' . $backup_id);
+
+        // Call agent's /backups/{id} DELETE endpoint
+        $response = wp_remote_request($delete_url, array(
+            'method' => 'DELETE',
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'timeout' => 30,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($data && isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
+        }
+    }
+
+    /**
+     * AJAX handler to get agent information
+     */
+    public function ajax_get_agent() {
+        check_ajax_referer('watchtower_manager_get_agent', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Site URL required'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        wp_send_json_success($agent);
+    }
+
+    /**
+     * AJAX handler to get activity logs from agent
+     */
+    public function ajax_get_activity_logs() {
+        check_ajax_referer('watchtower_manager_get_activity_logs', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $from = isset($_POST['from']) ? intval($_POST['from']) : null;
+        $to = isset($_POST['to']) ? intval($_POST['to']) : null;
+        $lines = isset($_POST['lines']) ? intval($_POST['lines']) : null;
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Site URL required'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        // Build audit endpoint URL
+        $translated_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/audit');
+
+        // Build query parameters
+        $query_params = array();
+        if ($lines !== null) {
+            $query_params['lines'] = $lines;
+        }
+        if ($from !== null) {
+            $query_params['from'] = $from;
+        }
+        if ($to !== null) {
+            $query_params['to'] = $to;
+        }
+
+        $url = add_query_arg($query_params, $translated_url);
+
+        // Make request to agent
+        $response = wp_remote_get($url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password'])
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        wp_send_json_success($data);
     }
 
     /**
@@ -1789,6 +2203,7 @@ class Watchtower_Manager_Admin_Dashboard {
                 <select id="mobile-tab-selector" style="width: 100%; height: 40px; font-size: 16px;">
                     <option value="overview" selected>Overview</option>
                     <option value="plugins">Plugins</option>
+                    <option value="activity">Activity</option>
                     <option value="logs">Logs</option>
                     <option value="actions">Actions</option>
                 </select>
@@ -1801,6 +2216,14 @@ class Watchtower_Manager_Admin_Dashboard {
                 </button>
                 <button class="watchtower-tab-btn" data-tab="plugins">
                     <span class="dashicons dashicons-admin-plugins"></span> Plugins
+                </button>
+                <?php /* Backups tab disabled
+                <button class="watchtower-tab-btn" data-tab="backups">
+                    <span class="dashicons dashicons-database-export"></span> Backups
+                </button>
+                */ ?>
+                <button class="watchtower-tab-btn" data-tab="activity">
+                    <span class="dashicons dashicons-clipboard"></span> Activity
                 </button>
                 <button class="watchtower-tab-btn" data-tab="logs">
                     <span class="dashicons dashicons-media-text"></span> Logs
@@ -1974,9 +2397,9 @@ class Watchtower_Manager_Admin_Dashboard {
                     <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
                         <thead>
                             <tr>
-                                <th>Plugin Name</th>
-                                <th>Version</th>
-                                <th>File</th>
+                                <th style="font-weight: bold;">Plugin Name</th>
+                                <th style="font-weight: bold;">Version</th>
+                                <th style="font-weight: bold;">File</th>
                             </tr>
                         </thead>
                         <tbody>
@@ -2004,6 +2427,127 @@ class Watchtower_Manager_Admin_Dashboard {
                     <p style="color: #646970;">Plugin information is not available. The agent may be offline or health monitoring may not be configured.</p>
                 </div>
                 <?php endif; ?>
+            </div>
+
+            <?php /* Backups tab content disabled
+            <!-- Tab Content: Backups -->
+            <div class="watchtower-tab-content" id="tab-backups" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">Backups</h2>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="create-backup-btn" class="button button-primary">
+                                <span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now
+                            </button>
+                            <button id="refresh-backups-btn" class="button" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 10px;" title="Refresh">
+                                <span class="dashicons dashicons-update" style="margin-top: 0;"></span>
+                            </button>
+                        </div>
+                    </div>
+                    <div id="backups-loading" style="text-align: center; padding: 40px;">
+                        <span class="dashicons dashicons-update" style="font-size: 32px; width: 32px; height: 32px; animation: rotation 2s infinite linear;"></span>
+                        <p>Loading backups...</p>
+                    </div>
+                    <div id="backups-container" style="display: none;">
+                        <table class="wp-list-table widefat fixed striped" id="backups-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%; font-weight: bold;">Date</th>
+                                    <th style="width: 15%; text-align: center; font-weight: bold;">Size</th>
+                                    <th style="width: 35%; text-align: center; font-weight: bold;">Components</th>
+                                    <th style="width: 25%; text-align: center; font-weight: bold;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backups-table-body">
+                                <!-- Populated by JavaScript -->
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="backups-empty" style="display: none; text-align: center; padding: 40px;">
+                        <span class="dashicons dashicons-database-export" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
+                        <h3>No Backups Found</h3>
+                        <p style="color: #646970;">There are no backups for this site yet. Create your first backup to get started.</p>
+                        <button class="button button-primary" onclick="document.getElementById('create-backup-btn').click();">
+                            <span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now
+                        </button>
+                    </div>
+                    <div id="backups-error" style="display: none; background: #fff; padding: 40px; border: 1px solid #ccd0d4; border-radius: 8px; text-align: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 64px; width: 64px; height: 64px; color: #d63638; margin-bottom: 15px;"></span>
+                        <h3>Unable to Load Backups</h3>
+                        <p style="color: #646970;" id="backups-error-message">An error occurred while loading backups.</p>
+                        <button class="button button-primary" onclick="document.getElementById('refresh-backups-btn').click();">
+                            <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Retry
+                        </button>
+                    </div>
+                </div>
+            </div>
+            */ ?>
+
+            <!-- Restore Progress Modal -->
+            <div id="restore-progress-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
+                <div style="background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                    <h2 style="margin-top: 0; margin-bottom: 20px;">Restoring Backup</h2>
+                    <p id="restore-progress-message" style="margin-bottom: 20px; color: #646970;">Initializing restore...</p>
+
+                    <div style="background: #f0f0f1; border-radius: 4px; height: 30px; overflow: hidden; margin-bottom: 15px;">
+                        <div id="restore-progress-bar" style="background: linear-gradient(90deg, #2271b1, #135e96); height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">
+                            <span id="restore-progress-percent">0%</span>
+                        </div>
+                    </div>
+
+                    <div style="text-align: center;">
+                        <button id="restore-progress-close" class="button button-secondary" style="display: none;">Close</button>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Activity -->
+            <div class="watchtower-tab-content" id="tab-activity" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                        <h2 style="margin: 0;">Activity Log</h2>
+                        <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
+                            <div style="display: flex; align-items: center;">
+                                <label for="activity-date-picker" style="margin-right: 8px; margin-bottom: 0;"><strong>Date:</strong></label>
+                                <input type="text" id="activity-date-picker" class="regular-text" style="width: 150px;" readonly placeholder="Select date...">
+                            </div>
+                            <div style="position: relative; display: flex; align-items: center;">
+                                <label for="activity-action-filter" style="margin-right: 8px; margin-bottom: 0;"><strong>Action:</strong></label>
+                                <button type="button" id="activity-action-filter" class="button" style="min-width: 120px; text-align: left; border-color: #8c8f94; color: #2c3338; font-size: 14px;">
+                                    All Actions <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>
+                                </button>
+                                <div id="activity-action-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; max-height: 300px; overflow-y: auto; margin-top: 4px;">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            <div style="position: relative; display: flex; align-items: center;">
+                                <label for="activity-actor-filter" style="margin-right: 8px; margin-bottom: 0;"><strong>Actor:</strong></label>
+                                <button type="button" id="activity-actor-filter" class="button" style="min-width: 120px; text-align: left; border-color: #8c8f94; color: #2c3338; font-size: 14px;">
+                                    All Actors <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>
+                                </button>
+                                <div id="activity-actor-dropdown" style="display: none; position: absolute; top: 100%; left: 0; background: #fff; border: 1px solid #ccc; border-radius: 4px; box-shadow: 0 2px 8px rgba(0,0,0,0.1); z-index: 1000; min-width: 200px; max-height: 300px; overflow-y: auto; margin-top: 4px;">
+                                    <!-- Populated dynamically -->
+                                </div>
+                            </div>
+                            <button type="button" id="activity-refresh-btn" class="button" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 10px;" title="Refresh">
+                                <span class="dashicons dashicons-update" style="margin-top: 0;"></span>
+                            </button>
+                        </div>
+                    </div>
+
+                    <div id="activity-log-viewer" style="background: #fff; border-radius: 4px; border: 1px solid #ddd; min-height: 400px; max-height: 600px; overflow-y: auto; position: relative;">
+                        <div style="text-align: center; padding: 50px 0; color: #888;">
+                            <span class="dashicons dashicons-calendar" style="font-size: 48px; width: 48px; height: 48px;"></span>
+                            <p style="margin-top: 15px;">Select a date to view activity logs</p>
+                        </div>
+                    </div>
+
+                    <div style="margin-top: 20px;">
+                        <div id="activity-stats" style="color: #666; font-size: 13px;">
+                            Showing <span id="activity-count-visible">0</span> of <span id="activity-count-total">0</span> entries
+                        </div>
+                    </div>
+                </div>
             </div>
 
             <!-- Tab Content: Logs -->
@@ -2047,7 +2591,7 @@ class Watchtower_Manager_Admin_Dashboard {
                         <button class="button button-primary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
                         </button>
-                        <button class="button button-secondary" onclick="location.reload();">
+                        <button class="button button-secondary watchtower-scan-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Scan
                         </button>
                         <?php
@@ -2132,6 +2676,32 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     jQuery(document).ready(function($) {
+        // Check for hash in URL and switch to that tab on page load
+        if (window.location.hash) {
+            var hash = window.location.hash.substring(1); // Remove the # character
+            var validTabs = ['overview', 'plugins', 'activity', 'logs', 'actions', 'backups'];
+
+            if (validTabs.indexOf(hash) !== -1) {
+                // Update active button
+                $('.watchtower-tab-btn').removeClass('active');
+                $('.watchtower-tab-btn[data-tab="' + hash + '"]').addClass('active');
+
+                // Update mobile selector
+                $('#mobile-tab-selector').val(hash);
+
+                // Show corresponding tab content
+                $('.watchtower-tab-content').hide();
+                $('#tab-' + hash).show();
+
+                // Load content for specific tabs if needed
+                if (hash === 'logs') {
+                    setTimeout(function() {
+                        loadAvailableLogs();
+                    }, 100);
+                }
+            }
+        }
+
         $('.watchtower-update-agent-btn').on('click', function() {
             var button = $(this);
             var siteUrl = button.data('site-url');
@@ -2196,6 +2766,35 @@ class Watchtower_Manager_Admin_Dashboard {
             });
         });
 
+        // Scan button on details page
+        $('.watchtower-scan-btn').on('click', function(e) {
+            e.preventDefault();
+            var button = $(this);
+            var siteUrl = button.data('site-url');
+            var originalHtml = button.html();
+
+            button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_scan_agent',
+                site_url: siteUrl,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Done!');
+                    setTimeout(function() {
+                        location.reload();
+                    }, 500);
+                } else {
+                    alert('Scan failed: ' + response.data.message);
+                    button.html(originalHtml).prop('disabled', false);
+                }
+            }).fail(function() {
+                alert('Scan request failed. Please try again.');
+                button.html(originalHtml).prop('disabled', false);
+            });
+        });
+
         // Tab switching (desktop)
         $('.watchtower-tab-btn').on('click', function() {
             var tab = $(this).data('tab');
@@ -2211,9 +2810,22 @@ class Watchtower_Manager_Admin_Dashboard {
             $('.watchtower-tab-content').hide();
             $('#tab-' + tab).show();
 
+            // Update URL hash
+            window.location.hash = '#' + tab;
+
             // Load logs if switching to logs tab
             if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
                 loadAvailableLogs();
+            }
+
+            // Load backups if switching to backups tab
+            if (tab === 'backups' && !$('#backups-table').data('loaded')) {
+                loadBackups();
+            }
+
+            // Load activity logs if switching to activity tab
+            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
+                loadActivityLogs();
             }
         });
 
@@ -2229,10 +2841,236 @@ class Watchtower_Manager_Admin_Dashboard {
             $('.watchtower-tab-content').hide();
             $('#tab-' + tab).show();
 
+            // Update URL hash
+            window.location.hash = '#' + tab;
+
+            // Load activity logs if switching to activity tab
+            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
+                loadActivityLogs();
+            }
+
             // Load logs if switching to logs tab
             if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
                 loadAvailableLogs();
             }
+
+            // Load backups if switching to backups tab
+            if (tab === 'backups' && !$('#backups-table').data('loaded')) {
+                loadBackups();
+            }
+        });
+
+        // Backups: Load backups list
+        function loadBackups() {
+            $('#backups-loading').show();
+            $('#backups-container').hide();
+            $('#backups-empty').hide();
+            $('#backups-error').hide();
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_get_backups',
+                site_url: '<?php echo esc_js($site_url); ?>',
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+            }, function(response) {
+                $('#backups-loading').hide();
+
+                if (response.success && response.data.success) {
+                    var backups = response.data.backups || [];
+
+                    if (backups.length > 0) {
+                        var tbody = $('#backups-table-body');
+                        tbody.empty();
+
+                        backups.forEach(function(backup) {
+                            var componentsHtml = backup.components.map(function(comp) {
+                                return '<span class="backup-component-badge">' + comp + '</span>';
+                            }).join(' ');
+
+                            var sizeText = backup.size ? formatBytes(backup.size) : '-';
+
+                            var row = $('<tr></tr>');
+                            row.append('<td><strong>' + backup.date + '</strong><br><small>ID: ' + backup.id + '</small></td>');
+                            row.append('<td style="text-align: center; vertical-align: middle;">' + sizeText + '</td>');
+                            row.append('<td style="text-align: center; vertical-align: middle;">' + componentsHtml + '</td>');
+                            row.append('<td style="text-align: center; vertical-align: middle;">' +
+                                '<button class="button button-small restore-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
+                                '<span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Restore' +
+                                '</button> ' +
+                                '<button class="button button-small button-link-delete delete-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
+                                '<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete' +
+                                '</button>' +
+                                '</td>');
+                            tbody.append(row);
+                        });
+
+                        $('#backups-container').show();
+                        $('#backups-table').data('loaded', true);
+                    } else {
+                        $('#backups-empty').show();
+                    }
+                } else {
+                    $('#backups-error').show();
+                    $('#backups-error-message').text(response.data && response.data.error ? response.data.error : 'Failed to load backups');
+                }
+            }).fail(function() {
+                $('#backups-loading').hide();
+                $('#backups-error').show();
+                $('#backups-error-message').text('Network error while loading backups');
+            });
+        }
+
+        // Backups: Create backup
+        $('#create-backup-btn').on('click', function() {
+            var button = $(this);
+
+            if (!confirm('Create a new backup? This may take several minutes.')) {
+                return;
+            }
+
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Creating...');
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_create_backup',
+                site_url: '<?php echo esc_js($site_url); ?>',
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
+                    setTimeout(function() {
+                        button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now').css('color', '');
+                        $('#backups-table').data('loaded', false);
+                        loadBackups();
+                    }, 2000);
+                } else {
+                    alert('Failed to create backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+                }
+            }).fail(function() {
+                alert('Network error while creating backup');
+                button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+            });
+        });
+
+        // Backups: Refresh
+        $('#refresh-backups-btn').on('click', function() {
+            $('#backups-table').data('loaded', false);
+            loadBackups();
+        });
+
+        // Backups: Restore
+        $(document).on('click', '.restore-backup-btn', function() {
+            var button = $(this);
+            var backupId = button.data('backup-id');
+            var backupDate = button.data('backup-date');
+
+            if (!confirm('Restore backup from ' + backupDate + '?\n\nWARNING: This will overwrite your current site data. The site may be temporarily unavailable during restore.')) {
+                return;
+            }
+
+            // Show progress modal
+            $('#restore-progress-modal').css('display', 'flex');
+            $('#restore-progress-message').text('Starting restore...');
+            $('#restore-progress-bar').css('width', '0%');
+            $('#restore-progress-percent').text('0%');
+            $('#restore-progress-close').hide();
+
+            // Start restore
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_restore_backup',
+                site_url: '<?php echo esc_js($site_url); ?>',
+                backup_id: backupId,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    // Start polling for progress
+                    pollRestoreProgress();
+                } else {
+                    $('#restore-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
+                    $('#restore-progress-close').show();
+                }
+            }).fail(function() {
+                $('#restore-progress-message').html('<span style="color: #d63638;">Network error while starting restore</span>');
+                $('#restore-progress-close').show();
+            });
+        });
+
+        // Poll restore progress
+        var restoreProgressInterval;
+        function pollRestoreProgress() {
+            restoreProgressInterval = setInterval(function() {
+                $.post(ajaxurl, {
+                    action: 'watchtower_manager_get_restore_status',
+                    site_url: '<?php echo esc_js($site_url); ?>',
+                    nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                }, function(response) {
+                    if (response.success && response.data.success) {
+                        var status = response.data.status;
+                        var percent = response.data.percent_complete;
+                        var message = response.data.message;
+
+                        $('#restore-progress-bar').css('width', percent + '%');
+                        $('#restore-progress-percent').text(percent + '%');
+                        $('#restore-progress-message').text(message);
+
+                        if (status === 'complete') {
+                            clearInterval(restoreProgressInterval);
+                            $('#restore-progress-message').html('<span style="color: #00a32a;">Restore completed successfully!</span>');
+                            $('#restore-progress-close').show();
+                            setTimeout(function() {
+                                location.reload();
+                            }, 2000);
+                        } else if (status === 'error') {
+                            clearInterval(restoreProgressInterval);
+                            $('#restore-progress-message').html('<span style="color: #d63638;">Restore failed: ' + message + '</span>');
+                            $('#restore-progress-close').show();
+                        }
+                    }
+                });
+            }, 2000); // Poll every 2 seconds
+        }
+
+        // Close restore progress modal
+        $('#restore-progress-close').on('click', function() {
+            if (restoreProgressInterval) {
+                clearInterval(restoreProgressInterval);
+            }
+            $('#restore-progress-modal').hide();
+        });
+
+        // Backups: Delete
+        $(document).on('click', '.delete-backup-btn', function() {
+            var button = $(this);
+            var backupId = button.data('backup-id');
+            var backupDate = button.data('backup-date');
+
+            if (!confirm('Delete backup from ' + backupDate + '? This cannot be undone.')) {
+                return;
+            }
+
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Deleting...');
+
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_delete_backup',
+                site_url: '<?php echo esc_js($site_url); ?>',
+                backup_id: backupId,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+            }, function(response) {
+                if (response.success) {
+                    button.closest('tr').fadeOut(300, function() {
+                        $(this).remove();
+                        if ($('#backups-table-body tr').length === 0) {
+                            $('#backups-container').hide();
+                            $('#backups-empty').show();
+                        }
+                    });
+                } else {
+                    alert('Failed to delete backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+                }
+            }).fail(function() {
+                alert('Network error while deleting backup');
+                button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+            });
         });
 
         // Load available log types
@@ -2363,12 +3201,322 @@ class Watchtower_Manager_Admin_Dashboard {
         $('#log-type-selector').on('change', loadLogs);
         $('#log-lines-count').on('change', loadLogs);
         $('#refresh-logs-btn').on('click', loadLogs);
+
+        // Activity Log functionality
+        var activitySelectedDate = null;
+        var activitySiteUrl = '<?php echo esc_js($site_url); ?>';
+        var activityAllEntries = [];  // All entries for the selected date
+        var activitySelectedActions = [];  // Selected action filters
+        var activitySelectedActors = [];   // Selected actor filters
+
+        // Initialize datepicker
+        $('#activity-date-picker').datepicker({
+            dateFormat: 'yy-mm-dd',
+            maxDate: 0,
+            onSelect: function(dateText) {
+                activitySelectedDate = dateText;
+                activitySelectedActions = [];
+                activitySelectedActors = [];
+                loadActivityLogs();
+            }
+        });
+
+        // Set default date to today (in UTC to match log file timestamps)
+        var today = new Date();
+        var todayStr = today.getUTCFullYear() + '-' +
+            String(today.getUTCMonth() + 1).padStart(2, '0') + '-' +
+            String(today.getUTCDate()).padStart(2, '0');
+        $('#activity-date-picker').val(todayStr);
+        activitySelectedDate = todayStr;
+
+        function loadActivityLogs() {
+            if (!activitySelectedDate) {
+                return;
+            }
+
+            // Parse date in UTC to avoid timezone issues
+            var dateParts = activitySelectedDate.split('-');
+            var year = parseInt(dateParts[0]);
+            var month = parseInt(dateParts[1]) - 1; // JavaScript months are 0-indexed
+            var day = parseInt(dateParts[2]);
+
+            var startOfDay = Date.UTC(year, month, day, 0, 0, 0) / 1000;
+            var endOfDay = Date.UTC(year, month, day, 23, 59, 59) / 1000;
+
+            // Show loading overlay without clearing existing content
+            var hasContent = $('#activity-log-viewer').find('table').length > 0;
+            if (hasContent) {
+                // Add overlay on existing content
+                if ($('#activity-loading-overlay').length === 0) {
+                    $('#activity-log-viewer').prepend('<div id="activity-loading-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 100; display: flex; align-items: center; justify-content: center;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear; color: #888;"></span></div>');
+                }
+            } else {
+                // No content yet, show centered loading message
+                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear;"></span><p>Loading activity logs...</p></div>');
+            }
+
+            // Get ALL activity logs for the day (no lines parameter)
+            $.post(ajaxurl, {
+                action: 'watchtower_manager_get_activity_logs',
+                site_url: activitySiteUrl,
+                from: startOfDay,
+                to: endOfDay,
+                nonce: '<?php echo wp_create_nonce('watchtower_manager_get_activity_logs'); ?>'
+            }, function(response) {
+                // Remove loading overlay
+                $('#activity-loading-overlay').remove();
+
+                if (response.success && response.data) {
+                    var data = response.data;
+                    if (data.success && data.entries && data.entries.length > 0) {
+                        // Store all entries
+                        activityAllEntries = data.entries;
+
+                        // Populate filter dropdowns
+                        populateActionFilter();
+                        populateActorFilter();
+
+                        // Display filtered results
+                        applyFiltersAndDisplay();
+                    } else {
+                        activityAllEntries = [];
+                        $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-info" style="font-size: 32px;"></span><p>No activity logs found for ' + activitySelectedDate + '</p></div>');
+                        $('#activity-count-visible').text('0');
+                        $('#activity-count-total').text('0');
+                    }
+                } else {
+                    activityAllEntries = [];
+                    var errorMsg = 'Failed to load activity logs';
+                    if (response.data && response.data.message) {
+                        errorMsg += ': ' + response.data.message;
+                    }
+                    $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #d63638;"><p>' + errorMsg + '</p></div>');
+                    $('#activity-count-visible').text('0');
+                    $('#activity-count-total').text('0');
+                }
+            }).fail(function() {
+                // Remove loading overlay
+                $('#activity-loading-overlay').remove();
+
+                activityAllEntries = [];
+                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #d63638;"><p>Failed to retrieve activity logs</p></div>');
+                $('#activity-count-visible').text('0');
+                $('#activity-count-total').text('0');
+            });
+        }
+
+        function displayActivityLogs(entries) {
+            var html = '<div style="position: relative;">';
+            html += '<table style="width: 100%; border-collapse: collapse;">';
+            html += '<thead><tr style="background: #f0f0f1; position: sticky; top: 0; z-index: 10;">';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Time</th>';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Action</th>';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Actor</th>';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">IP Address</th>';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Details</th>';
+            html += '</tr></thead><tbody>';
+
+            entries.forEach(function(entry, index) {
+                var rowStyle = index % 2 === 0 ? 'background: #fff;' : 'background: #f9f9f9;';
+                html += '<tr style="' + rowStyle + '">';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.timestamp) + '</td>';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee;"><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.actor_name) + '</td>';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.ip_address) + '</td>';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; color: #2c3338; line-height: 1.6;">' + formatDetails(entry.details) + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</tbody></table>';
+            html += '</div>';
+            $('#activity-log-viewer').html(html);
+        }
+
+        function escapeHtml(text) {
+            if (text === null || text === undefined) return '';
+            var map = {
+                '&': '&amp;',
+                '<': '&lt;',
+                '>': '&gt;',
+                '"': '&quot;',
+                "'": '&#039;'
+            };
+            return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
+        }
+
+        function formatDetails(details) {
+            if (!details || Object.keys(details).length === 0) {
+                return '<span style="color: #999;">—</span>';
+            }
+
+            var html = '';
+            var keys = Object.keys(details);
+
+            keys.forEach(function(key, index) {
+                var value = details[key];
+                var formattedValue = '';
+
+                // Format the value based on type
+                if (value === null || value === undefined) {
+                    formattedValue = '<span style="color: #999;">null</span>';
+                } else if (typeof value === 'object' && !Array.isArray(value)) {
+                    // Nested object - display inline if small, otherwise format nicely
+                    var subKeys = Object.keys(value);
+                    if (subKeys.length <= 3) {
+                        // Small object - display inline
+                        var subParts = [];
+                        subKeys.forEach(function(subKey) {
+                            subParts.push(subKey + ': ' + escapeHtml(String(value[subKey])));
+                        });
+                        formattedValue = '{' + subParts.join(', ') + '}';
+                    } else {
+                        // Larger object - display as bullet list
+                        formattedValue = '<div style="margin-left: 12px;">';
+                        subKeys.forEach(function(subKey) {
+                            formattedValue += '• ' + escapeHtml(subKey) + ': ' + escapeHtml(String(value[subKey])) + '<br>';
+                        });
+                        formattedValue += '</div>';
+                    }
+                } else if (Array.isArray(value)) {
+                    // Array - display as comma-separated list
+                    formattedValue = '[' + value.map(function(v) { return escapeHtml(String(v)); }).join(', ') + ']';
+                } else {
+                    // Simple value
+                    formattedValue = escapeHtml(String(value));
+                }
+
+                // Add to HTML
+                if (index > 0) {
+                    html += '<br>';
+                }
+                html += '<strong>' + escapeHtml(key) + ':</strong> ' + formattedValue;
+            });
+
+            return html;
+        }
+
+        function populateActionFilter() {
+            var actions = {};
+            activityAllEntries.forEach(function(entry) {
+                actions[entry.action] = (actions[entry.action] || 0) + 1;
+            });
+
+            var html = '<div style="padding: 8px;">';
+            Object.keys(actions).sort().forEach(function(action) {
+                var checked = activitySelectedActions.length === 0 || activitySelectedActions.indexOf(action) !== -1;
+                html += '<label style="display: block; padding: 4px 8px; cursor: pointer; user-select: none;">';
+                html += '<input type="checkbox" class="action-filter-checkbox" value="' + escapeHtml(action) + '" ' + (checked ? 'checked' : '') + '> ';
+                html += escapeHtml(action) + ' <span style="color: #999;">(' + actions[action] + ')</span>';
+                html += '</label>';
+            });
+            html += '</div>';
+            $('#activity-action-dropdown').html(html);
+        }
+
+        function populateActorFilter() {
+            var actors = {};
+            activityAllEntries.forEach(function(entry) {
+                actors[entry.actor_name] = (actors[entry.actor_name] || 0) + 1;
+            });
+
+            var html = '<div style="padding: 8px;">';
+            Object.keys(actors).sort().forEach(function(actor) {
+                var checked = activitySelectedActors.length === 0 || activitySelectedActors.indexOf(actor) !== -1;
+                html += '<label style="display: block; padding: 4px 8px; cursor: pointer; user-select: none;">';
+                html += '<input type="checkbox" class="actor-filter-checkbox" value="' + escapeHtml(actor) + '" ' + (checked ? 'checked' : '') + '> ';
+                html += escapeHtml(actor) + ' <span style="color: #999;">(' + actors[actor] + ')</span>';
+                html += '</label>';
+            });
+            html += '</div>';
+            $('#activity-actor-dropdown').html(html);
+        }
+
+        function applyFiltersAndDisplay() {
+            var filteredEntries = activityAllEntries.filter(function(entry) {
+                var actionMatch = activitySelectedActions.length === 0 || activitySelectedActions.indexOf(entry.action) !== -1;
+                var actorMatch = activitySelectedActors.length === 0 || activitySelectedActors.indexOf(entry.actor_name) !== -1;
+                return actionMatch && actorMatch;
+            });
+
+            displayActivityLogs(filteredEntries);
+            $('#activity-count-visible').text(filteredEntries.length);
+            $('#activity-count-total').text(activityAllEntries.length);
+
+            // Update filter button labels
+            if (activitySelectedActions.length === 0) {
+                $('#activity-action-filter').html('All Actions <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
+            } else {
+                $('#activity-action-filter').html(activitySelectedActions.length + ' selected <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
+            }
+
+            if (activitySelectedActors.length === 0) {
+                $('#activity-actor-filter').html('All Actors <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
+            } else {
+                $('#activity-actor-filter').html(activitySelectedActors.length + ' selected <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
+            }
+        }
+
+        // Filter dropdown handlers
+        $('#activity-action-filter').on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $('#activity-actor-dropdown').hide();
+            $('#activity-action-dropdown').toggle();
+        });
+
+        $('#activity-actor-filter').on('click', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            $('#activity-action-dropdown').hide();
+            $('#activity-actor-dropdown').toggle();
+        });
+
+        // Close dropdowns when clicking outside
+        $(document).on('click', function() {
+            $('#activity-action-dropdown').hide();
+            $('#activity-actor-dropdown').hide();
+        });
+
+        // Handle action filter checkbox changes
+        $(document).on('change', '.action-filter-checkbox', function(e) {
+            e.stopPropagation();
+            activitySelectedActions = [];
+            $('.action-filter-checkbox:checked').each(function() {
+                activitySelectedActions.push($(this).val());
+            });
+            applyFiltersAndDisplay();
+        });
+
+        // Handle actor filter checkbox changes
+        $(document).on('change', '.actor-filter-checkbox', function(e) {
+            e.stopPropagation();
+            activitySelectedActors = [];
+            $('.actor-filter-checkbox:checked').each(function() {
+                activitySelectedActors.push($(this).val());
+            });
+            applyFiltersAndDisplay();
+        });
+
+        // Prevent dropdown from closing when clicking inside
+        $('#activity-action-dropdown, #activity-actor-dropdown').on('click', function(e) {
+            e.stopPropagation();
+        });
+
+        $('#activity-refresh-btn').on('click', function(e) {
+            e.preventDefault();
+            loadActivityLogs();
+        });
     });
     </script>
     <style>
     @keyframes rotation {
         from { transform: rotate(0deg); }
         to { transform: rotate(359deg); }
+    }
+
+    /* jQuery UI Datepicker z-index fix */
+    .ui-datepicker {
+        z-index: 9999 !important;
     }
 
     /* Tab Navigation */
@@ -2416,7 +3564,7 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     .watchtower-tab-content {
-        margin-top: 0;
+        margin-top: 20px;
     }
 
     #tab-overview {

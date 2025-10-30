@@ -42,10 +42,10 @@ docker-compose down
 docker-compose logs -f wordpress
 
 # Deploy plugins to container
-docker cp build/remote-agent wordpress_site:/var/www/html/wp-content/plugins/
-docker cp build/remote-manager wordpress_site:/var/www/html/wp-content/plugins/
-docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/remote-agent
-docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/remote-manager
+docker cp build/watchtower-agent wordpress_site:/var/www/html/wp-content/plugins/
+docker cp build/watchtower-manager wordpress_site:/var/www/html/wp-content/plugins/
+docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/watchtower-agent
+docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/watchtower-manager
 ```
 
 ## Build System
@@ -93,8 +93,8 @@ build.bat
 
 ```
 watchtower/
-├── remote-agent/           # Agent plugin
-│   ├── remote-agent.php    # Main plugin file
+├── agent/                  # Agent plugin source
+│   ├── agent.php           # Main plugin file
 │   └── includes/
 │       ├── class-watchtower-agent.php
 │       ├── class-rest-api-controller.php
@@ -106,8 +106,8 @@ watchtower/
 │           ├── class-update-management.php
 │           └── class-log-management.php
 │
-├── remote-manager/         # Manager plugin
-│   ├── remote-manager.php  # Main plugin file
+├── manager/                # Manager plugin source
+│   ├── manager.php         # Main plugin file
 │   ├── includes/
 │   │   ├── class-watchtower-manager.php
 │   │   ├── class-agent-storage.php
@@ -338,10 +338,10 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
    cd build
    unzip -q -o watchtower-agent-*.zip
    unzip -q -o watchtower-manager-*.zip
-   docker cp remote-agent wordpress_site:/var/www/html/wp-content/plugins/
-   docker cp remote-manager wordpress_site:/var/www/html/wp-content/plugins/
-   docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/remote-agent
-   docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/remote-manager
+   docker cp watchtower-agent wordpress_site:/var/www/html/wp-content/plugins/
+   docker cp watchtower-manager wordpress_site:/var/www/html/wp-content/plugins/
+   docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/watchtower-agent
+   docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/plugins/watchtower-manager
    ```
 5. Verify deployment: `curl -s http://localhost:8082/wp-json/watchtower-agent/v1/health`
 
@@ -361,14 +361,14 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 - `version.properties` - Generated during build from git tags
 
 ### Agent Plugin
-- `remote-agent/remote-agent.php` - Main plugin file, version: WATCHTOWER_AGENT_VERSION
-- `remote-agent/includes/class-rest-api-controller.php` - All REST endpoints including `/health`
+- `agent/agent.php` - Main plugin file, version: WATCHTOWER_AGENT_VERSION
+- `agent/includes/class-rest-api-controller.php` - All REST endpoints including `/health`
 
 ### Manager Plugin
-- `remote-manager/remote-manager.php` - Main plugin file, version: WATCHTOWER_MANAGER_VERSION
-- `remote-manager/includes/class-agent-storage.php` - Manages info.json
-- `remote-manager/includes/class-health-storage.php` - Manages health.json, data splitting logic
-- `remote-manager/includes/class-admin-dashboard.php` - WordPress admin UI
+- `manager/manager.php` - Main plugin file, version: WATCHTOWER_MANAGER_VERSION
+- `manager/includes/class-agent-storage.php` - Manages info.json
+- `manager/includes/class-health-storage.php` - Manages health.json, data splitting logic
+- `manager/includes/class-admin-dashboard.php` - WordPress admin UI
 
 ## Git Information
 
@@ -391,7 +391,7 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 ### Code Standards
 - The `build/` directory is in `.gitignore`
 - Root `version.properties` was removed - now generated during build
-- Manager plugin data directory (`remote-manager/data/sites/`) is in `.gitignore`
+- Manager plugin data directory (`manager/data/sites/`) is in `.gitignore`
 - Both plugins support WordPress multisite installations
 - Application Passwords must be enabled (WordPress 5.6+)
 - Minimum requirements: WordPress 5.8+, PHP 7.4+, MySQL 5.6+
@@ -421,7 +421,7 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
    - Automatically recovers if Wordfence setting is re-enabled
    - Runs on Application Password filters - zero performance impact when not using auth
    - Prevents 401 authentication errors on sites with Wordfence installed
-   - See `watchtower_agent_check_wordfence_app_password_block()` function (remote-agent.php:337-377)
+   - See `watchtower_agent_check_wordfence_app_password_block()` function (agent/agent.php:337-377)
 
 4. **Plugin Update System Improvements**
    - Changed from delete-and-move to copy-over strategy for plugin updates

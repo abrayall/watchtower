@@ -108,6 +108,23 @@ class Watchtower_Manager_REST_Controller {
             'callback' => array($this, 'get_status'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
+
+        // Update agent password endpoint (public but requires matching site URL)
+        register_rest_route($this->namespace, '/update-agent-password', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'update_agent_password'),
+            'permission_callback' => '__return_true', // Public endpoint
+            'args' => array(
+                'site_url' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+                'password' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+            ),
+        ));
     }
 
     /**
@@ -228,6 +245,41 @@ class Watchtower_Manager_REST_Controller {
             'agent_count' => $this->storage->get_agent_count(),
             'timestamp' => current_time('mysql'),
         ), 200);
+    }
+
+    /**
+     * Update agent password
+     */
+    public function update_agent_password($request) {
+        $site_url = $request->get_param('site_url');
+        $password = $request->get_param('password');
+
+        // Get the agent
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        // Update the password
+        $agent['password'] = $password;
+        $result = $this->storage->save_agent($agent);
+
+        if ($result) {
+            error_log('Watchtower Manager: Updated password for agent: ' . $site_url);
+            return new WP_REST_Response(array(
+                'success' => true,
+                'message' => 'Password updated successfully',
+            ), 200);
+        } else {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Failed to update password',
+            ), 500);
+        }
     }
 
     /**
