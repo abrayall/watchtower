@@ -199,7 +199,13 @@ class Watchtower_Manager_Admin_Dashboard {
             <?php // <a href="#" class="page-title-action">Add New Site</a> ?>
             <hr class="wp-header-end">
 
-            <div class="watchtower-manager-dashboard">
+            <div style="position: relative; min-height: 400px;">
+                <div id="watchtower-dashboard-loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #fff; z-index: 100; display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                    <div class="watchtower-spinner"></div>
+                </div>
+
+                <div id="watchtower-dashboard-content" style="opacity: 0; transition: opacity 0.3s ease;">
+                    <div class="watchtower-manager-dashboard">
                 <!-- Stats Grid -->
                 <div class="stats-grid">
                     <div class="stat-card stat-total filter-card" data-filter="all" onclick="filterSites('all')">
@@ -401,7 +407,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             <?php
                             $details_url = add_query_arg(array(
                                 'page' => 'watchtower-manager-site-details',
-                                'site_url' => urlencode($agent['site_url'])
+                                'site' => urlencode($agent['site_url'])
                             ), admin_url('admin.php'));
                             $health_status = $agent['health_status'];
                             $health_age = $this->site_storage->get_health_data_age($agent['site_url']);
@@ -486,6 +492,8 @@ class Watchtower_Manager_Admin_Dashboard {
                         <?php endforeach; ?>
                     <?php endif; ?>
                 </div>
+                </div>
+            </div>
             </div>
         </div>
 
@@ -1207,7 +1215,13 @@ class Watchtower_Manager_Admin_Dashboard {
         </a>
         <hr class="wp-header-end">
 
-        <div class="watchtower-manager-dashboard">
+        <div style="position: relative; min-height: 400px;">
+            <div id="watchtower-page-loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #fff; z-index: 100; display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                <div class="watchtower-spinner"></div>
+            </div>
+
+            <div id="watchtower-page-content" style="opacity: 0; transition: opacity 0.3s ease;">
+                <div class="watchtower-manager-dashboard">
             <!-- Overall Health Status -->
             <div class="health-status-card <?php echo $overall_status; ?>">
                 <span class="dashicons <?php
@@ -1619,11 +1633,11 @@ class Watchtower_Manager_Admin_Dashboard {
                         <h2 style="margin: 0;">Activity Log</h2>
                         <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                             <div style="display: flex; align-items: center;">
-                                <label for="activity-date-picker" style="margin-right: 8px; margin-bottom: 0;"><strong>Date:</strong></label>
+                                <label for="activity-date-picker" style="margin-right: 8px; margin-bottom: 0; min-width: 60px;"><strong>Date:</strong></label>
                                 <input type="text" id="activity-date-picker" class="regular-text" style="width: 150px;" readonly placeholder="Select date...">
                             </div>
                             <div style="position: relative; display: flex; align-items: center;">
-                                <label for="activity-action-filter" style="margin-right: 8px; margin-bottom: 0;"><strong>Action:</strong></label>
+                                <label for="activity-action-filter" style="margin-right: 8px; margin-bottom: 0; min-width: 60px;"><strong>Action:</strong></label>
                                 <button type="button" id="activity-action-filter" class="button" style="min-width: 120px; text-align: left; border-color: #8c8f94; color: #2c3338; font-size: 14px;">
                                     All Actions <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>
                                 </button>
@@ -1632,7 +1646,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                 </div>
                             </div>
                             <div style="position: relative; display: flex; align-items: center;">
-                                <label for="activity-actor-filter" style="margin-right: 8px; margin-bottom: 0;"><strong>Actor:</strong></label>
+                                <label for="activity-actor-filter" style="margin-right: 8px; margin-bottom: 0; min-width: 60px;"><strong>Actor:</strong></label>
                                 <button type="button" id="activity-actor-filter" class="button" style="min-width: 120px; text-align: left; border-color: #8c8f94; color: #2c3338; font-size: 14px;">
                                     All Actors <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>
                                 </button>
@@ -1723,6 +1737,8 @@ class Watchtower_Manager_Admin_Dashboard {
                     </p>
                 </div>
             </div>
+            </div>
+        </div>
         </div>
     </div>
 

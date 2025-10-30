@@ -3,6 +3,27 @@
         to { transform: rotate(359deg); }
     }
 
+    @keyframes spin {
+        0% { transform: rotate(0deg); }
+        100% { transform: rotate(360deg); }
+    }
+
+    .watchtower-spinner {
+        display: inline-block;
+        width: 32px;
+        height: 32px;
+        border: 3px solid rgba(0, 0, 0, 0.1);
+        border-top-color: #2271b1;
+        border-radius: 50%;
+        animation: spin 0.8s linear infinite;
+    }
+
+    .watchtower-spinner-small {
+        width: 16px;
+        height: 16px;
+        border-width: 2px;
+    }
+
     .dashicons-update {
         display: inline-block;
         transform-origin: center center;
@@ -23,6 +44,11 @@
     }
 
     @media (max-width: 782px) {
+        #watchtower-dashboard-loading {
+            align-items: flex-start !important;
+            padding-top: 100px;
+        }
+
         .watchtower-manager-dashboard .stats-grid {
             grid-template-columns: repeat(3, 1fr);
             gap: 6px;
