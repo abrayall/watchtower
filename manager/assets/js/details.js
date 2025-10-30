@@ -625,7 +625,7 @@
             var html = '<div style="position: relative;">';
             html += '<table style="width: 100%; border-collapse: collapse;">';
             html += '<thead><tr style="background: #f0f0f1; position: sticky; top: 0; z-index: 10;">';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Time</th>';
+            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1; width: 180px; min-width: 180px;">Time</th>';
             html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Action</th>';
             html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Actor</th>';
             html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">IP Address</th>';
@@ -635,7 +635,7 @@
             entries.forEach(function(entry, index) {
                 var rowStyle = index % 2 === 0 ? 'background: #fff;' : 'background: #f9f9f9;';
                 html += '<tr style="' + rowStyle + '">';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.timestamp) + '</td>';
+                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; width: 180px; min-width: 180px; white-space: nowrap;">' + escapeHtml(entry.timestamp) + '</td>';
                 html += '<td style="padding: 8px; border-bottom: 1px solid #eee;"><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
                 html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.actor_name) + '</td>';
                 html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.ip_address) + '</td>';
