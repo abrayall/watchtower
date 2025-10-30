@@ -63,7 +63,7 @@
                 return;
             }
 
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Updating...');
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Updating...');
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_update_agent',
@@ -95,7 +95,7 @@
                 return;
             }
 
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_toggle_debug',
@@ -124,7 +124,7 @@
             var siteUrl = button.data('site-url');
             var originalHtml = button.html();
 
-            button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
+            button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_scan_agent',
@@ -275,7 +275,7 @@
                 return;
             }
 
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Creating...');
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Creating...');
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_create_backup',
@@ -387,7 +387,7 @@
                 return;
             }
 
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Deleting...');
+            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Deleting...');
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_delete_backup',
@@ -571,10 +571,10 @@
             var hasContent = $('#activity-log-viewer').find('table').length > 0;
             if (hasContent) {
                 if ($('#activity-loading-overlay').length === 0) {
-                    $('#activity-log-viewer').prepend('<div id="activity-loading-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 100; display: flex; align-items: center; justify-content: center;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear; color: #888;"></span></div>');
+                    $('#activity-log-viewer').prepend('<div id="activity-loading-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 100; display: flex; align-items: center; justify-content: center;"><div class="watchtower-spinner"></div></div>');
                 }
             } else {
-                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear;"></span><p>Loading activity logs...</p></div>');
+                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><div class="watchtower-spinner" style="margin: 0 auto 15px;"></div><p>Loading activity logs...</p></div>');
             }
 
             $.post(context.ajaxurl, {
@@ -839,4 +839,11 @@
                 }
             }
         }
+
+        setTimeout(function() {
+            $('#watchtower-page-loading').fadeOut(300, function() {
+                $(this).remove();
+            });
+            $('#watchtower-page-content').css('opacity', '1');
+        }, 500);
     });

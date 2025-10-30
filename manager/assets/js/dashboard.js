@@ -154,4 +154,11 @@
                     document.body.removeChild(textarea);
                 }
             });
+
+            setTimeout(function() {
+                $('#watchtower-dashboard-loading').fadeOut(300, function() {
+                    $(this).remove();
+                });
+                $('#watchtower-dashboard-content').css('opacity', '1');
+            }, 500);
         });
