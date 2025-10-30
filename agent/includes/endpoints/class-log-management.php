@@ -25,14 +25,12 @@ class Watchtower_Agent_Log_Management {
      * Register routes
      */
     public function register_routes() {
-        // Get available logs
         register_rest_route($this->namespace, '/logs', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_available_logs'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Get log entries
         register_rest_route($this->namespace, '/logs/(?P<type>debug|error|access)', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_logs'),
@@ -66,7 +64,6 @@ class Watchtower_Agent_Log_Management {
             ),
         ));
 
-        // Enable/disable debug mode
         register_rest_route($this->namespace, '/debug', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'set_debug_mode'),
@@ -91,7 +88,6 @@ class Watchtower_Agent_Log_Management {
         foreach ($types as $type) {
             $log_file = $this->discover_log_file($type);
 
-            // Skip if we've already added this file path
             if ($log_file && isset($seen_paths[$log_file])) {
                 continue;
             }
@@ -130,7 +126,6 @@ class Watchtower_Agent_Log_Management {
         $type = $request->get_param('type');
         $lines = $request->get_param('lines');
 
-        // Discover log file path
         $log_file = $this->discover_log_file($type);
 
         if (!$log_file) {
@@ -159,7 +154,6 @@ class Watchtower_Agent_Log_Management {
             ), 403);
         }
 
-        // Read last N lines from file (backwards)
         $log_lines = $this->read_file_backwards($log_file, $lines);
 
         return new WP_REST_Response(array(
@@ -178,7 +172,6 @@ class Watchtower_Agent_Log_Management {
     private function discover_log_file($type) {
         switch ($type) {
             case 'debug':
-                // WordPress debug log
                 if (defined('WP_DEBUG_LOG') && WP_DEBUG_LOG) {
                     if (is_string(WP_DEBUG_LOG)) {
                         return WP_DEBUG_LOG;
@@ -188,12 +181,10 @@ class Watchtower_Agent_Log_Management {
                 return null;
 
             case 'error':
-                // PHP error log
                 $error_log = ini_get('error_log');
                 if ($error_log && $error_log !== 'syslog') {
                     return $error_log;
                 }
-                // Try common locations
                 $common_paths = array(
                     '/var/log/php/error.log',
                     '/var/log/php-fpm/error.log',
@@ -208,10 +199,8 @@ class Watchtower_Agent_Log_Management {
                 return null;
 
             case 'access':
-                // Web server access log
                 $server_software = $_SERVER['SERVER_SOFTWARE'] ?? '';
 
-                // Try to detect server type
                 if (stripos($server_software, 'apache') !== false) {
                     $common_paths = array(
                         '/var/log/apache2/access.log',
@@ -223,7 +212,6 @@ class Watchtower_Agent_Log_Management {
                         '/var/log/nginx/access.log',
                     );
                 } else {
-                    // Try both
                     $common_paths = array(
                         '/var/log/apache2/access.log',
                         '/var/log/nginx/access.log',
@@ -247,7 +235,6 @@ class Watchtower_Agent_Log_Management {
      * Read last N lines from a file efficiently (backwards reading)
      */
     private function read_file_backwards($file, $lines) {
-        // Handle 'all' parameter - read entire file
         if ($lines === 'all') {
             $lines = PHP_INT_MAX;
         }
@@ -268,30 +255,23 @@ class Watchtower_Agent_Log_Management {
         $lines_found = array();
         $position = $file_size;
 
-        // Read file backwards in chunks
         while ($position > 0 && count($lines_found) < $lines) {
-            // Calculate chunk position
             $chunk_start = max(0, $position - $chunk_size);
             $chunk_length = $position - $chunk_start;
 
-            // Seek to position and read chunk
             fseek($handle, $chunk_start);
             $chunk = fread($handle, $chunk_length);
 
-            // Prepend to buffer
             $buffer = $chunk . $buffer;
 
-            // Split into lines
             $split_lines = explode("\n", $buffer);
 
-            // Keep the first part (incomplete line) in buffer for next iteration
             if ($position > $chunk_size) {
                 $buffer = array_shift($split_lines);
             } else {
                 $buffer = '';
             }
 
-            // Add lines to result (in reverse order since we're reading backwards)
             for ($i = count($split_lines) - 1; $i >= 0; $i--) {
                 $line = trim($split_lines[$i]);
                 if ($line !== '') {
@@ -305,7 +285,6 @@ class Watchtower_Agent_Log_Management {
             $position = $chunk_start;
         }
 
-        // If we have leftover buffer content, it's the first line
         if ($buffer !== '' && count($lines_found) < $lines) {
             $line = trim($buffer);
             if ($line !== '') {
@@ -315,7 +294,6 @@ class Watchtower_Agent_Log_Management {
 
         fclose($handle);
 
-        // Return in chronological order (oldest first)
         return $lines_found;
     }
 
@@ -325,7 +303,6 @@ class Watchtower_Agent_Log_Management {
     public function set_debug_mode($request) {
         $enabled = $request->get_param('enabled');
 
-        // Find wp-config.php
         $config_file = $this->find_wp_config();
 
         if (!$config_file) {
@@ -343,7 +320,6 @@ class Watchtower_Agent_Log_Management {
             ), 403);
         }
 
-        // Update debug constants
         $result = $this->update_debug_constants($config_file, $enabled);
 
         if (!$result['success']) {
@@ -366,12 +342,10 @@ class Watchtower_Agent_Log_Management {
      * Find wp-config.php location
      */
     private function find_wp_config() {
-        // Try standard location
         if (file_exists(ABSPATH . 'wp-config.php')) {
             return ABSPATH . 'wp-config.php';
         }
 
-        // Try one level up (for WordPress in subdirectory)
         if (file_exists(dirname(ABSPATH) . '/wp-config.php')) {
             return dirname(ABSPATH) . '/wp-config.php';
         }
@@ -394,7 +368,6 @@ class Watchtower_Agent_Log_Management {
 
         $value = $enabled ? 'true' : 'false';
 
-        // Constants to update
         $constants = array(
             'WP_DEBUG' => $value,
             'WP_DEBUG_LOG' => $value,
@@ -402,18 +375,15 @@ class Watchtower_Agent_Log_Management {
         );
 
         foreach ($constants as $constant => $const_value) {
-            // Check if constant is already defined
             $pattern = "/define\s*\(\s*['\"]" . $constant . "['\"]\s*,\s*.*?\s*\)\s*;/";
 
             if (preg_match($pattern, $config_content)) {
-                // Replace existing definition
                 $config_content = preg_replace(
                     $pattern,
                     "define( '" . $constant . "', " . $const_value . " );",
                     $config_content
                 );
             } else {
-                // Add new definition before the "That's all" comment
                 $insert = "define( '" . $constant . "', " . $const_value . " );\n";
                 $config_content = preg_replace(
                     "/(\/\*.*?stop editing.*?\*\/)/i",
@@ -424,7 +394,6 @@ class Watchtower_Agent_Log_Management {
             }
         }
 
-        // Write back to file
         $result = file_put_contents($config_file, $config_content);
 
         if ($result === false) {

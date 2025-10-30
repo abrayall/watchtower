@@ -25,28 +25,24 @@ class Watchtower_Agent_Update_Management {
      * Register routes
      */
     public function register_routes() {
-        // Check for available updates
         register_rest_route($this->namespace, '/updates/check', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'check_updates'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Update WordPress core
         register_rest_route($this->namespace, '/updates/core', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_core'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Update all plugins
         register_rest_route($this->namespace, '/updates/plugins', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_all_plugins'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Update specific plugin
         register_rest_route($this->namespace, '/updates/plugin/(?P<plugin>[a-zA-Z0-9_-]+)', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_plugin'),
@@ -59,14 +55,12 @@ class Watchtower_Agent_Update_Management {
             ),
         ));
 
-        // Update all themes
         register_rest_route($this->namespace, '/updates/themes', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_all_themes'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Update specific theme
         register_rest_route($this->namespace, '/updates/theme/(?P<theme>[a-zA-Z0-9_-]+)', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_theme'),
@@ -79,7 +73,6 @@ class Watchtower_Agent_Update_Management {
             ),
         ));
 
-        // Update everything
         register_rest_route($this->namespace, '/updates/all', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_all'),
@@ -91,13 +84,11 @@ class Watchtower_Agent_Update_Management {
      * Check for available updates
      */
     public function check_updates($request) {
-        // Force check for updates
         wp_update_plugins();
         wp_update_themes();
         do_action('wp_update_plugins');
         do_action('wp_update_themes');
 
-        // Get core updates
         $core_updates = get_core_updates();
         $core_update_available = false;
         $core_version = null;
@@ -107,7 +98,6 @@ class Watchtower_Agent_Update_Management {
             $core_version = $core_updates[0]->version;
         }
 
-        // Get plugin updates
         $plugin_updates = get_plugin_updates();
         $plugins_needing_update = array();
 
@@ -120,7 +110,6 @@ class Watchtower_Agent_Update_Management {
             );
         }
 
-        // Get theme updates
         $theme_updates = get_theme_updates();
         $themes_needing_update = array();
 
@@ -161,7 +150,6 @@ class Watchtower_Agent_Update_Management {
         require_once ABSPATH . 'wp-admin/includes/file.php';
         require_once ABSPATH . 'wp-admin/includes/misc.php';
 
-        // Check for updates
         $core_updates = get_core_updates();
 
         if (empty($core_updates) || $core_updates[0]->response != 'upgrade') {
@@ -173,7 +161,6 @@ class Watchtower_Agent_Update_Management {
 
         $update = $core_updates[0];
 
-        // Create upgrader instance
         $upgrader = new Core_Upgrader(new WP_Ajax_Upgrader_Skin());
         $result = $upgrader->upgrade($update);
 
@@ -255,7 +242,6 @@ class Watchtower_Agent_Update_Management {
         $plugin_slug = $request->get_param('plugin');
         $plugin_updates = get_plugin_updates();
 
-        // Find the plugin file
         $plugin_file = null;
         foreach ($plugin_updates as $file => $plugin_data) {
             if (strpos($file, $plugin_slug) !== false) {
@@ -386,17 +372,14 @@ class Watchtower_Agent_Update_Management {
             'themes' => null,
         );
 
-        // Update core
         $core_result = $this->update_core($request);
         $core_data = $core_result->get_data();
         $results['core'] = $core_data;
 
-        // Update plugins
         $plugins_result = $this->update_all_plugins($request);
         $plugins_data = $plugins_result->get_data();
         $results['plugins'] = $plugins_data;
 
-        // Update themes
         $themes_result = $this->update_all_themes($request);
         $themes_data = $themes_result->get_data();
         $results['themes'] = $themes_data;

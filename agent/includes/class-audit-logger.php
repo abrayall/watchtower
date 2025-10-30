@@ -38,7 +38,6 @@ class WP_Remote_Agent_Audit_Logger {
      * Constructor
      */
     private function __construct() {
-        // Store logs in wp-content/watchtower/agent/audit/
         $upload_dir = wp_upload_dir();
         $base_dir = dirname($upload_dir['basedir']) . '/watchtower';
 
@@ -54,13 +53,11 @@ class WP_Remote_Agent_Audit_Logger {
         if (!file_exists($this->log_dir)) {
             wp_mkdir_p($this->log_dir);
 
-            // Create .htaccess to prevent web access
             $htaccess = $this->log_dir . '/.htaccess';
             if (!file_exists($htaccess)) {
                 file_put_contents($htaccess, "Deny from all\n");
             }
 
-            // Create index.php to prevent directory listing
             $index = $this->log_dir . '/index.php';
             if (!file_exists($index)) {
                 file_put_contents($index, "<?php\n// Silence is golden.\n");
@@ -72,29 +69,23 @@ class WP_Remote_Agent_Audit_Logger {
      * Initialize WordPress hooks
      */
     private function init_hooks() {
-        // User management hooks
         add_action('user_register', array($this, 'log_user_created'), 10, 1);
         add_action('profile_update', array($this, 'log_user_updated'), 10, 2);
         add_action('delete_user', array($this, 'log_user_deleted'), 10, 2);
         add_action('set_user_role', array($this, 'log_role_changed'), 10, 3);
 
-        // Authentication hooks
         add_action('wp_login', array($this, 'log_user_login'), 10, 2);
         add_action('wp_logout', array($this, 'log_user_logout'), 10, 1);
         add_action('wp_login_failed', array($this, 'log_login_failed'), 10, 2);
 
-        // Plugin/theme hooks
         add_action('activated_plugin', array($this, 'log_plugin_activated'), 10, 2);
         add_action('deactivated_plugin', array($this, 'log_plugin_deactivated'), 10, 2);
         add_action('switch_theme', array($this, 'log_theme_switched'), 10, 3);
 
-        // WordPress update hooks
         add_action('_core_updated_successfully', array($this, 'log_core_updated'), 10, 1);
 
-        // REST API hooks
         add_filter('rest_post_dispatch', array($this, 'log_rest_api_call'), 10, 3);
 
-        // Daily cleanup cron
         add_action('wp_remote_agent_daily_cleanup', array($this, 'cleanup_old_logs'));
         if (!wp_next_scheduled('wp_remote_agent_daily_cleanup')) {
             wp_schedule_event(time(), 'daily', 'wp_remote_agent_daily_cleanup');
@@ -120,7 +111,6 @@ class WP_Remote_Agent_Audit_Logger {
 
         $log_line = json_encode($entry) . "\n";
 
-        // Append to log file
         file_put_contents($log_file, $log_line, FILE_APPEND | LOCK_EX);
     }
 
@@ -184,12 +174,10 @@ class WP_Remote_Agent_Audit_Logger {
 
         $changes = array();
 
-        // Check for email change
         if ($old_user_data->user_email !== $user->user_email) {
             $changes['email'] = array('old' => $old_user_data->user_email, 'new' => $user->user_email);
         }
 
-        // Check for role change
         $old_roles = $old_user_data->roles;
         $new_roles = $user->roles;
         if ($old_roles !== $new_roles) {
@@ -304,7 +292,6 @@ class WP_Remote_Agent_Audit_Logger {
      * REST API call hook
      */
     public function log_rest_api_call($response, $server, $request) {
-        // Only log our plugin's API calls
         if (strpos($request->get_route(), '/watchtower-agent/') !== 0) {
             return $response;
         }

@@ -25,48 +25,39 @@ class Watchtower_Agent_REST_Controller {
      * Register all REST API routes
      */
     public function register_routes() {
-        // User Management endpoints
         $user_management = new Watchtower_Agent_User_Management($this->namespace);
         $user_management->register_routes();
 
-        // Backup Management endpoints
         $backup_management = new Watchtower_Agent_Backup_Management($this->namespace);
         $backup_management->register_routes();
 
-        // Update Management endpoints
         $update_management = new Watchtower_Agent_Update_Management($this->namespace);
         $update_management->register_routes();
 
-        // Log Management endpoints
         $log_management = new Watchtower_Agent_Log_Management($this->namespace);
         $log_management->register_routes();
 
-        // Audit endpoints
         $audit_endpoint = new WP_Remote_Agent_Audit_Endpoint($this->namespace);
         $audit_endpoint->register_routes();
 
-        // Info endpoint (public)
         register_rest_route($this->namespace, '/info', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_info'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
 
-        // Application password retrieval endpoint (public, but transient-based)
         register_rest_route($this->namespace, '/app-password', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_app_password'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
 
-        // Health endpoint (public)
         register_rest_route($this->namespace, '/health', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_health'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
 
-        // Update endpoint - for auto-updating the agent plugin
         register_rest_route($this->namespace, '/update', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_plugin'),
@@ -78,7 +69,6 @@ class Watchtower_Agent_REST_Controller {
      * Get plugin info (static configuration data)
      */
     public function get_info($request) {
-        // PHP Information
         $php_info = array(
             'version' => PHP_VERSION,
             'memory_limit' => ini_get('memory_limit'),
@@ -88,7 +78,6 @@ class Watchtower_Agent_REST_Controller {
             'extensions' => get_loaded_extensions(),
         );
 
-        // WordPress Information
         $site_icon_url = get_site_icon_url();
         $wordpress_info = array(
             'version' => get_bloginfo('version'),
@@ -104,7 +93,6 @@ class Watchtower_Agent_REST_Controller {
             'multisite' => is_multisite(),
         );
 
-        // Database Information
         global $wpdb;
         $db_info = array(
             'database_name' => DB_NAME,
@@ -115,7 +103,6 @@ class Watchtower_Agent_REST_Controller {
             'database_version' => $wpdb->db_version(),
         );
 
-        // Get database size
         $db_size_query = $wpdb->get_var("
             SELECT SUM(data_length + index_length)
             FROM information_schema.TABLES
@@ -126,7 +113,6 @@ class Watchtower_Agent_REST_Controller {
             $db_info['database_size_bytes'] = $db_size_query;
         }
 
-        // Server Information
         $server_info = array(
             'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'Unknown',
@@ -136,7 +122,6 @@ class Watchtower_Agent_REST_Controller {
             'https' => is_ssl(),
         );
 
-        // Active Plugins
         $active_plugins = get_option('active_plugins', array());
         $plugins_info = array(
             'active_count' => count($active_plugins),
@@ -152,7 +137,6 @@ class Watchtower_Agent_REST_Controller {
             );
         }
 
-        // Active Theme
         $theme = wp_get_theme();
         $theme_info = array(
             'name' => $theme->get('Name'),
@@ -161,7 +145,6 @@ class Watchtower_Agent_REST_Controller {
             'stylesheet' => $theme->get_stylesheet(),
         );
 
-        // WordPress Constants
         $wp_constants = array(
             'WP_DEBUG' => defined('WP_DEBUG') ? WP_DEBUG : false,
             'WP_DEBUG_LOG' => defined('WP_DEBUG_LOG') ? WP_DEBUG_LOG : false,
@@ -213,7 +196,6 @@ class Watchtower_Agent_REST_Controller {
      * Get system health information
      */
     public function get_health($request) {
-        // PHP Information
         $php_info = array(
             'version' => PHP_VERSION,
             'memory_limit' => ini_get('memory_limit'),
@@ -223,7 +205,6 @@ class Watchtower_Agent_REST_Controller {
             'extensions' => get_loaded_extensions(),
         );
 
-        // Memory Usage
         $memory_usage = array(
             'current' => round(memory_get_usage() / 1024 / 1024, 2) . ' MB',
             'current_bytes' => memory_get_usage(),
@@ -234,13 +215,11 @@ class Watchtower_Agent_REST_Controller {
             'wp_max_memory_limit' => WP_MAX_MEMORY_LIMIT,
         );
 
-        // Calculate memory usage percentage
         $memory_limit_bytes = $this->convert_to_bytes(ini_get('memory_limit'));
         if ($memory_limit_bytes > 0) {
             $memory_usage['usage_percentage'] = round((memory_get_usage() / $memory_limit_bytes) * 100, 2) . '%';
         }
 
-        // WordPress Information
         $site_icon_url = get_site_icon_url();
         $wordpress_info = array(
             'version' => get_bloginfo('version'),
@@ -256,7 +235,6 @@ class Watchtower_Agent_REST_Controller {
             'multisite' => is_multisite(),
         );
 
-        // Database Information
         global $wpdb;
         $db_info = array(
             'database_name' => DB_NAME,
@@ -267,7 +245,6 @@ class Watchtower_Agent_REST_Controller {
             'database_version' => $wpdb->db_version(),
         );
 
-        // Get database size
         $db_size_query = $wpdb->get_var("
             SELECT SUM(data_length + index_length)
             FROM information_schema.TABLES
@@ -278,7 +255,6 @@ class Watchtower_Agent_REST_Controller {
             $db_info['database_size_bytes'] = $db_size_query;
         }
 
-        // Server Information
         $server_info = array(
             'software' => $_SERVER['SERVER_SOFTWARE'] ?? 'Unknown',
             'protocol' => $_SERVER['SERVER_PROTOCOL'] ?? 'Unknown',
@@ -288,7 +264,6 @@ class Watchtower_Agent_REST_Controller {
             'https' => is_ssl(),
         );
 
-        // Disk Space (if available)
         $disk_info = array();
         if (function_exists('disk_free_space') && function_exists('disk_total_space')) {
             $disk_free = @disk_free_space(ABSPATH);
@@ -308,16 +283,13 @@ class Watchtower_Agent_REST_Controller {
             }
         }
 
-        // CPU Load (if available on Linux/Unix)
         $cpu_info = array();
         if (function_exists('sys_getloadavg')) {
             $load = sys_getloadavg();
 
-            // Get CPU core count
             $cores = 1; // Default fallback
             if (function_exists('shell_exec')) {
                 if (stripos(PHP_OS, 'WIN') === 0) {
-                    // Windows
                     $output = shell_exec('wmic cpu get NumberOfCores');
                     if ($output) {
                         preg_match_all('/\d+/', $output, $matches);
@@ -326,7 +298,6 @@ class Watchtower_Agent_REST_Controller {
                         }
                     }
                 } else {
-                    // Linux/Unix
                     $output = shell_exec('nproc 2>/dev/null || grep -c ^processor /proc/cpuinfo 2>/dev/null || sysctl -n hw.ncpu 2>/dev/null');
                     if ($output) {
                         $cores = intval(trim($output));
@@ -334,7 +305,6 @@ class Watchtower_Agent_REST_Controller {
                 }
             }
 
-            // Calculate CPU usage percentage based on 1-minute load average
             $usage_percentage = ($cores > 0) ? round(($load[0] / $cores) * 100, 1) : 0;
 
             $cpu_info = array(
@@ -346,7 +316,6 @@ class Watchtower_Agent_REST_Controller {
             );
         }
 
-        // Active Plugins
         $active_plugins = get_option('active_plugins', array());
         $plugins_info = array(
             'active_count' => count($active_plugins),
@@ -362,7 +331,6 @@ class Watchtower_Agent_REST_Controller {
             );
         }
 
-        // Active Theme
         $theme = wp_get_theme();
         $theme_info = array(
             'name' => $theme->get('Name'),
@@ -371,7 +339,6 @@ class Watchtower_Agent_REST_Controller {
             'stylesheet' => $theme->get_stylesheet(),
         );
 
-        // WordPress Constants
         $wp_constants = array(
             'WP_DEBUG' => defined('WP_DEBUG') ? WP_DEBUG : false,
             'WP_DEBUG_LOG' => defined('WP_DEBUG_LOG') ? WP_DEBUG_LOG : false,
@@ -383,7 +350,6 @@ class Watchtower_Agent_REST_Controller {
             'COMPRESS_CSS' => defined('COMPRESS_CSS') ? COMPRESS_CSS : true,
         );
 
-        // Uptime (if available)
         $uptime_info = array();
         if (function_exists('shell_exec') && !in_array('shell_exec', array_map('trim', explode(',', ini_get('disable_functions'))))) {
             $uptime = @shell_exec('uptime');
@@ -433,7 +399,6 @@ class Watchtower_Agent_REST_Controller {
      * Update agent plugin from uploaded ZIP file
      */
     public function update_plugin($request) {
-        // Get uploaded file from request
         $files = $request->get_file_params();
 
         if (empty($files['file'])) {
@@ -445,7 +410,6 @@ class Watchtower_Agent_REST_Controller {
 
         $file = $files['file'];
 
-        // Validate file type - be more lenient
         $allowed_types = array('application/zip', 'application/x-zip-compressed', 'application/x-zip', 'application/octet-stream');
         if (!in_array($file['type'], $allowed_types) && !preg_match('/\.zip$/i', $file['name'])) {
             return new WP_REST_Response(array(
@@ -454,7 +418,6 @@ class Watchtower_Agent_REST_Controller {
             ), 400);
         }
 
-        // Validate file uploaded successfully
         if ($file['error'] !== UPLOAD_ERR_OK) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -462,7 +425,6 @@ class Watchtower_Agent_REST_Controller {
             ), 400);
         }
 
-        // Create temp directory
         $temp_dir = get_temp_dir() . 'watchtower-update-' . time();
         if (!wp_mkdir_p($temp_dir)) {
             return new WP_REST_Response(array(
@@ -471,7 +433,6 @@ class Watchtower_Agent_REST_Controller {
             ), 500);
         }
 
-        // Extract ZIP using PHP's ZipArchive (more reliable than WordPress unzip_file)
         if (!class_exists('ZipArchive')) {
             $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
@@ -502,7 +463,6 @@ class Watchtower_Agent_REST_Controller {
 
         $zip->close();
 
-        // Find the plugin directory in extracted files
         $extracted_files = scandir($temp_dir);
         $plugin_dir = null;
         foreach ($extracted_files as $item) {
@@ -523,7 +483,6 @@ class Watchtower_Agent_REST_Controller {
         $source_path = trailingslashit($temp_dir) . $plugin_dir;
         $dest_path = WP_PLUGIN_DIR . '/' . $plugin_dir;
 
-        // Instead of deleting and moving, copy over files (safer for active plugins)
         if (!$this->copy_directory($source_path, $dest_path)) {
             $this->delete_directory($temp_dir);
             return new WP_REST_Response(array(
@@ -532,10 +491,8 @@ class Watchtower_Agent_REST_Controller {
             ), 500);
         }
 
-        // Clean up temp directory
         $this->delete_directory($temp_dir);
 
-        // Verify plugin was installed
         $plugin_file = null;
         foreach (array('agent.php', $plugin_dir . '.php') as $possible_file) {
             $check_path = $plugin_dir . '/' . $possible_file;
@@ -552,9 +509,6 @@ class Watchtower_Agent_REST_Controller {
             ), 500);
         }
 
-        // Plugin updated successfully
-        // Note: We don't need to reactivate - the plugin remains active during update
-        // WordPress will automatically load the new version on the next request
         return new WP_REST_Response(array(
             'success' => true,
             'message' => 'Plugin updated successfully',
@@ -566,14 +520,12 @@ class Watchtower_Agent_REST_Controller {
      * Recursively copy a directory
      */
     private function copy_directory($source, $dest) {
-        // Create destination directory if it doesn't exist
         if (!file_exists($dest)) {
             if (!wp_mkdir_p($dest)) {
                 return false;
             }
         }
 
-        // Get directory contents
         $items = scandir($source);
 
         foreach ($items as $item) {
@@ -585,12 +537,10 @@ class Watchtower_Agent_REST_Controller {
             $dest_item = $dest . DIRECTORY_SEPARATOR . $item;
 
             if (is_dir($source_item)) {
-                // Recursively copy subdirectory
                 if (!$this->copy_directory($source_item, $dest_item)) {
                     return false;
                 }
             } else {
-                // Copy file, overwriting if exists
                 if (!copy($source_item, $dest_item)) {
                     return false;
                 }
@@ -629,7 +579,6 @@ class Watchtower_Agent_REST_Controller {
      * Check if user has permission to update plugin (more permissive for file uploads)
      */
     public function check_update_permission($request) {
-        // Check if user is authenticated (Application Password or regular auth)
         if (!is_user_logged_in()) {
             return new WP_Error(
                 'rest_forbidden',
@@ -638,7 +587,6 @@ class Watchtower_Agent_REST_Controller {
             );
         }
 
-        // Check if user has admin capabilities
         if (!current_user_can('manage_options')) {
             return new WP_Error(
                 'rest_forbidden',

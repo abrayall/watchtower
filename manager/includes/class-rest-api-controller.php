@@ -31,7 +31,6 @@ class Watchtower_Manager_REST_Controller {
      * Register all REST API routes
      */
     public function register_routes() {
-        // Agent registration endpoint (public)
         register_rest_route($this->namespace, '/register', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'register_agent'),
@@ -69,14 +68,12 @@ class Watchtower_Manager_REST_Controller {
             ),
         ));
 
-        // List all agents endpoint (protected)
         register_rest_route($this->namespace, '/agents', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'list_agents'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Get specific agent endpoint (protected)
         register_rest_route($this->namespace, '/agents/(?P<id>\d+)', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_agent'),
@@ -89,7 +86,6 @@ class Watchtower_Manager_REST_Controller {
             ),
         ));
 
-        // Delete agent endpoint (protected)
         register_rest_route($this->namespace, '/agents', array(
             'methods' => WP_REST_Server::DELETABLE,
             'callback' => array($this, 'delete_agent'),
@@ -102,14 +98,12 @@ class Watchtower_Manager_REST_Controller {
             ),
         ));
 
-        // Manager status endpoint (public)
         register_rest_route($this->namespace, '/status', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_status'),
             'permission_callback' => '__return_true', // Public endpoint
         ));
 
-        // Update agent password endpoint (public but requires matching site URL)
         register_rest_route($this->namespace, '/update-agent-password', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'update_agent_password'),
@@ -135,7 +129,6 @@ class Watchtower_Manager_REST_Controller {
         $username = $request->get_param('username');
         $password = $request->get_param('password');
 
-        // Validate required fields
         if (empty($site_url) || empty($username) || empty($password)) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -143,7 +136,6 @@ class Watchtower_Manager_REST_Controller {
             ), 400);
         }
 
-        // Prepare agent data
         $agent_data = array(
             'site_url' => $site_url,
             'username' => $username,
@@ -153,11 +145,9 @@ class Watchtower_Manager_REST_Controller {
             'agent_version' => $request->get_param('agent_version') ?: 'unknown',
         );
 
-        // Save agent
         $result = $this->storage->save_agent($agent_data);
 
         if ($result) {
-            // Get the saved agent data
             $saved_agent = $this->storage->get_agent_by_url($site_url);
 
             return new WP_REST_Response(array(
@@ -179,7 +169,6 @@ class Watchtower_Manager_REST_Controller {
     public function list_agents($request) {
         $agents = $this->storage->get_all_agents();
 
-        // Mask passwords for security
         foreach ($agents as &$agent) {
             $agent['password'] = '********';
         }
@@ -254,7 +243,6 @@ class Watchtower_Manager_REST_Controller {
         $site_url = $request->get_param('site_url');
         $password = $request->get_param('password');
 
-        // Get the agent
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -264,7 +252,6 @@ class Watchtower_Manager_REST_Controller {
             ), 404);
         }
 
-        // Update the password
         $agent['password'] = $password;
         $result = $this->storage->save_agent($agent);
 

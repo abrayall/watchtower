@@ -25,7 +25,6 @@ class Watchtower_Agent_Backup_Management {
      * Register routes
      */
     public function register_routes() {
-        // Trigger backup
         register_rest_route($this->namespace, '/backup', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'run_backup'),
@@ -40,14 +39,12 @@ class Watchtower_Agent_Backup_Management {
             ),
         ));
 
-        // List backups
         register_rest_route($this->namespace, '/backups', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'list_backups'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Restore backup
         register_rest_route($this->namespace, '/restore', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'restore_backup'),
@@ -61,14 +58,12 @@ class Watchtower_Agent_Backup_Management {
             ),
         ));
 
-        // Get restore status
         register_rest_route($this->namespace, '/restore/status', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_restore_status'),
             'permission_callback' => array($this, 'check_permission'),
         ));
 
-        // Get or Delete backup
         register_rest_route($this->namespace, '/backups/(?P<id>\d+)', array(
             array(
                 'methods' => WP_REST_Server::READABLE,
@@ -110,7 +105,6 @@ class Watchtower_Agent_Backup_Management {
 
         $type = $request->get_param('type');
 
-        // Prepare backup options
         $backup_files = true;
         $backup_database = true;
 
@@ -121,15 +115,12 @@ class Watchtower_Agent_Backup_Management {
         }
 
         try {
-            // Trigger the backup (UpdraftPlus will generate the timestamp)
             $result = $updraftplus->boot_backup($backup_files, $backup_database);
 
             if ($result) {
-                // Get the actual backup ID/timestamp from UpdraftPlus
                 $backup_id = $updraftplus->backup_time;
                 $nonce = $updraftplus->file_nonce;
 
-                // Store backup job info
                 set_transient('watchtower_backup_' . $backup_id, array(
                     'status' => 'running',
                     'percent_complete' => 5,
@@ -138,7 +129,6 @@ class Watchtower_Agent_Backup_Management {
                     'started_at' => current_time('mysql'),
                 ), 3600); // Keep for 1 hour
 
-                // Schedule pruning after backup completes (wait 5 minutes)
                 wp_schedule_single_event(time() + 300, 'watchtower_agent_prune_backups');
 
                 return new WP_REST_Response(array(
@@ -177,14 +167,11 @@ class Watchtower_Agent_Backup_Management {
 
         global $updraftplus;
 
-        // Get backup history
         $backup_history = UpdraftPlus_Backup_History::get_history();
         $updraft_dir = $updraftplus->backups_dir_location();
 
         $backups = array();
         foreach ($backup_history as $timestamp => $backup) {
-            // Skip backups that don't have their database file
-            // Without the DB file, a backup cannot be restored
             if (!empty($backup['db'])) {
                 $db_file = $updraft_dir . '/' . $backup['db'];
                 if (!file_exists($db_file)) {
@@ -192,7 +179,6 @@ class Watchtower_Agent_Backup_Management {
                     continue; // Skip this backup
                 }
             } else {
-                // No database at all - skip this backup
                 continue;
             }
 
@@ -204,7 +190,6 @@ class Watchtower_Agent_Backup_Management {
                 'complete' => true,
             );
 
-            // Check which components are available and calculate total size
             $components = array();
             $total_size = 0;
 
@@ -236,7 +221,6 @@ class Watchtower_Agent_Backup_Management {
             $backups[] = $backup_data;
         }
 
-        // Sort by timestamp (newest first)
         usort($backups, function($a, $b) {
             return $b['timestamp'] - $a['timestamp'];
         });
@@ -263,7 +247,6 @@ class Watchtower_Agent_Backup_Management {
 
         global $updraftplus;
 
-        // Get backup history
         $backup_history = UpdraftPlus_Backup_History::get_history();
 
         if (!isset($backup_history[$timestamp])) {
@@ -275,7 +258,6 @@ class Watchtower_Agent_Backup_Management {
 
         $backup = $backup_history[$timestamp];
 
-        // Validate backup has necessary components
         if (empty($backup['db'])) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -283,21 +265,15 @@ class Watchtower_Agent_Backup_Management {
             ), 400);
         }
 
-        // Execute restore synchronously with long timeout
         error_log('Watchtower: Starting restore process for backup: ' . $timestamp);
 
-        // Set up PHP to allow long-running process
         ignore_user_abort(true);
         set_time_limit(600); // 10 minutes max
 
-        // Start output buffering to capture UpdraftPlus output
-        // UpdraftPlus logs to stdout which corrupts the JSON response
         ob_start();
 
-        // Execute the restore action immediately
         do_action('watchtower_agent_execute_restore', $timestamp);
 
-        // Discard UpdraftPlus output
         $restore_output = ob_get_clean();
         if (!empty($restore_output)) {
             error_log('Watchtower: Captured and discarded UpdraftPlus output (' . strlen($restore_output) . ' bytes)');
@@ -305,7 +281,6 @@ class Watchtower_Agent_Backup_Management {
 
         error_log('Watchtower: Restore action completed for backup: ' . $timestamp);
 
-        // Return response after restore completes
         return new WP_REST_Response(array(
             'success' => true,
             'message' => 'Restore completed',
@@ -318,7 +293,6 @@ class Watchtower_Agent_Backup_Management {
      * Get restore status
      */
     public function get_restore_status($request) {
-        // Check if there's a restore in progress
         $restore_job_id = get_site_option('updraft_restore_in_progress');
         $progress = get_site_option('watchtower_restore_progress', false);
 
@@ -331,7 +305,6 @@ class Watchtower_Agent_Backup_Management {
             ), 200);
         }
 
-        // Determine status based on progress
         $status = 'running';
         $message = 'Restore in progress';
         $percent_complete = $progress !== false ? (int)$progress : 0;
@@ -349,7 +322,6 @@ class Watchtower_Agent_Backup_Management {
             $percent_complete = 0;
             $message = 'Restore failed';
         } else {
-            // Still running
             if ($percent_complete < 30) {
                 $message = 'Preparing restore...';
             } elseif ($percent_complete < 60) {
@@ -383,13 +355,11 @@ class Watchtower_Agent_Backup_Management {
 
         $timestamp = $request->get_param('id');
 
-        // First check if backup exists in history (completed)
         $backup_history = UpdraftPlus_Backup_History::get_history();
 
         if (isset($backup_history[$timestamp])) {
             $backup = $backup_history[$timestamp];
 
-            // Check which components are available and calculate total size
             $components = array();
             $total_size = 0;
 
@@ -428,7 +398,6 @@ class Watchtower_Agent_Backup_Management {
             ), 200);
         }
 
-        // Check if backup is in progress
         $job_data = get_transient('watchtower_backup_' . $timestamp);
 
         if ($job_data) {
@@ -444,7 +413,6 @@ class Watchtower_Agent_Backup_Management {
             ), 200);
         }
 
-        // Backup not found
         return new WP_REST_Response(array(
             'success' => false,
             'error' => 'Backup not found',
@@ -464,14 +432,12 @@ class Watchtower_Agent_Backup_Management {
 
         $timestamp = $request->get_param('id');
 
-        // Load UpdraftPlus admin if not loaded
         global $updraftplus_admin;
         if (!$updraftplus_admin || !method_exists($updraftplus_admin, 'delete_set')) {
             require_once WP_PLUGIN_DIR . '/updraftplus/admin.php';
             $updraftplus_admin = new UpdraftPlus_Admin();
         }
 
-        // Get backup history
         $backup_history = UpdraftPlus_Backup_History::get_history();
 
         if (!isset($backup_history[$timestamp])) {
@@ -481,7 +447,6 @@ class Watchtower_Agent_Backup_Management {
             ), 404);
         }
 
-        // Delete the backup
         $backup = $backup_history[$timestamp];
         $nonce = isset($backup['nonce']) ? $backup['nonce'] : '';
 

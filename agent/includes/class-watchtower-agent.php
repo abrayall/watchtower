@@ -23,10 +23,8 @@ class Watchtower_Agent {
      * Initialize the plugin
      */
     public function init() {
-        // Register REST API routes
         add_action('rest_api_init', array($this, 'register_routes'));
 
-        // Add custom capability checks
         add_action('init', array($this, 'setup_capabilities'));
     }
 
@@ -42,7 +40,6 @@ class Watchtower_Agent {
      * Setup custom capabilities
      */
     public function setup_capabilities() {
-        // Administrator gets all remote management capabilities
         $admin_role = get_role('administrator');
         if ($admin_role) {
             $admin_role->add_cap('manage_remote_users');

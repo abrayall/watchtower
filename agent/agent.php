@@ -13,7 +13,6 @@
  * Requires PHP: 7.4
  */
 
-// Prevent direct access
 if (!defined('ABSPATH')) {
     exit;
 }
@@ -37,12 +36,10 @@ function watchtower_agent_get_version() {
     return $properties['major'] . '.' . $properties['minor'] . '.' . $properties['maintenance'];
 }
 
-// Define plugin constants
 define('WATCHTOWER_AGENT_VERSION', watchtower_agent_get_version());
 define('WATCHTOWER_AGENT_PLUGIN_DIR', plugin_dir_path(__FILE__));
 define('WATCHTOWER_AGENT_PLUGIN_URL', plugin_dir_url(__FILE__));
 
-// Load plugin classes
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-watchtower-agent.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-rest-api-controller.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-user-management.php';
@@ -53,23 +50,19 @@ require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-audit-endpo
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-admin-settings.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-audit-logger.php';
 
-// Initialize the plugin
 function watchtower_agent_init() {
     $plugin = new Watchtower_Agent();
     $plugin->init();
 
-    // Initialize admin settings (only in admin area)
     if (is_admin()) {
         $settings = new Watchtower_Agent_Admin_Settings();
         $settings->init();
     }
 
-    // Initialize audit logger
     WP_Remote_Agent_Audit_Logger::get_instance();
 }
 add_action('plugins_loaded', 'watchtower_agent_init');
 
-// Add settings link on plugins page
 add_filter('plugin_action_links_' . plugin_basename(__FILE__), 'watchtower_agent_add_settings_link');
 function watchtower_agent_add_settings_link($links) {
     $settings_link = '<a href="' . admin_url('options-general.php?page=watchtower-agent') . '">Settings</a>';
@@ -77,70 +70,51 @@ function watchtower_agent_add_settings_link($links) {
     return $links;
 }
 
-// Enable Application Passwords if they're disabled
 add_filter('wp_is_application_passwords_available', 'watchtower_agent_enable_app_passwords');
 function watchtower_agent_enable_app_passwords($available) {
-    // Check if Wordfence is blocking Application Passwords and disable it
     watchtower_agent_check_wordfence_app_password_block();
 
-    // Force enable Application Passwords for this plugin to work
     return true;
 }
 
-// Enable Application Passwords for the REST API
 add_filter('application_password_is_api_request', 'watchtower_agent_enable_app_passwords_api', 10, 1);
 function watchtower_agent_enable_app_passwords_api($is_api_request) {
-    // Check if Wordfence is blocking Application Passwords and disable it
     watchtower_agent_check_wordfence_app_password_block();
 
-    // Check if this is a Watchtower request
     if (isset($_SERVER['REQUEST_URI']) && strpos($_SERVER['REQUEST_URI'], 'watchtower-agent') !== false) {
         return true;
     }
     return $is_api_request;
 }
 
-// Activation hook
 register_activation_hook(__FILE__, 'watchtower_agent_activate');
 function watchtower_agent_activate() {
-    // Flush rewrite rules
     flush_rewrite_rules();
 
-    // Check if Application Passwords are available
     $app_passwords_available = wp_is_application_passwords_available();
 
     if (!$app_passwords_available) {
-        // Try to enable via wp-config.php if possible
         watchtower_agent_enable_app_passwords_in_config();
     }
 
-    // Check if Wordfence is blocking Application Passwords and disable it
     watchtower_agent_check_wordfence_app_password_block();
 
-    // Install and activate UpdraftPlus if not already installed
     watchtower_agent_ensure_updraftplus();
 
-    // Sync manager URL option for password auto-update after restore
-    // The registration uses 'watchtower_agent_manager_url' but restore code uses 'watchtower_manager_url'
     $agent_manager_url = get_option('watchtower_agent_manager_url');
     if (!empty($agent_manager_url)) {
         update_option('watchtower_manager_url', $agent_manager_url);
-        // Set a default key for local/trusted managers
         if (empty(get_option('watchtower_manager_key'))) {
             update_option('watchtower_manager_key', 'local-manager');
         }
     }
 
-    // Schedule weekly backup cron job
     if (!wp_next_scheduled('watchtower_agent_weekly_backup')) {
-        // Schedule for Sunday at 11:00 PM (23:00) in site timezone
         wp_schedule_event(strtotime('next Sunday 23:00'), 'weekly', 'watchtower_agent_weekly_backup');
     }
 
-    // Generate application password for the first admin user
     require_once ABSPATH . 'wp-admin/includes/user.php';
 
-    // Get the first administrator user
     $admin_users = get_users(array(
         'role' => 'administrator',
         'number' => 1,
@@ -151,9 +125,7 @@ function watchtower_agent_activate() {
     if (!empty($admin_users)) {
         $admin_user = $admin_users[0];
 
-        // Check if WP_Application_Passwords class exists (WordPress 5.6+)
         if (class_exists('WP_Application_Passwords')) {
-            // Check if an app password with this name already exists
             $existing_passwords = WP_Application_Passwords::get_user_application_passwords($admin_user->ID);
             $password_exists = false;
 
@@ -164,7 +136,6 @@ function watchtower_agent_activate() {
                 }
             }
 
-            // Only create if it doesn't exist
             if (!$password_exists) {
                 $result = WP_Application_Passwords::create_new_application_password($admin_user->ID, array(
                     'name' => 'watchtower-agent'
@@ -173,27 +144,22 @@ function watchtower_agent_activate() {
                 if (!is_wp_error($result)) {
                     list($password, $password_data) = $result;
 
-                    // Store the password temporarily (for 10 minutes) so it can be retrieved
                     set_transient('watchtower_agent_app_password', array(
                         'username' => $admin_user->user_login,
                         'password' => $password,
                         'created' => current_time('mysql')
                     ), 600); // 10 minutes
 
-                    // Also log to error log for reference
                     error_log('Watchtower Agent: Application password created for user "' . $admin_user->user_login . '"');
                     error_log('Watchtower Agent: Password: ' . $password);
                     error_log('Watchtower Agent: This password is also stored in transient "watchtower_agent_app_password" for 10 minutes');
 
-                    // Check if manager is installed locally
                     $manager_storage_file = WP_PLUGIN_DIR . '/remote-manager/includes/class-agent-storage.php';
 
                     if (file_exists($manager_storage_file)) {
-                        // Manager is local - auto-register
                         error_log('Watchtower Agent: Manager detected locally, auto-registering...');
                         watchtower_agent_register_with_manager($admin_user->user_login, $password);
                     } else {
-                        // Manager is remote - check if auto-register is enabled
                         $auto_register = get_option('watchtower_agent_auto_register', false);
                         $manager_url = get_option('watchtower_agent_manager_url', '');
 
@@ -216,12 +182,10 @@ function watchtower_agent_activate() {
  * @return true|string Returns true on success, error message string on failure
  */
 function watchtower_agent_register_with_manager($username, $password) {
-    // Check if manager plugin is installed and active
     $manager_storage_file = WP_PLUGIN_DIR . '/watchtower-manager/includes/class-agent-storage.php';
     $manager_active = is_plugin_active('watchtower-manager/manager.php');
 
     if (file_exists($manager_storage_file) && $manager_active && defined('WATCHTOWER_MANAGER_DATA_DIR')) {
-        // Manager is on same WordPress instance and active - use direct storage access
         require_once $manager_storage_file;
 
         $storage = new Watchtower_Manager_Agent_Storage();
@@ -241,7 +205,6 @@ function watchtower_agent_register_with_manager($username, $password) {
         if ($result) {
             error_log('Watchtower Agent: Successfully registered with manager (local)');
 
-            // Store manager URL and external site URL for password auto-sync after restore
             update_option('watchtower_manager_url', get_site_url());
             update_option('watchtower_external_site_url', $agent_data['site_url']);  // URL manager knows us by
             if (empty(get_option('watchtower_manager_key'))) {
@@ -255,7 +218,6 @@ function watchtower_agent_register_with_manager($username, $password) {
             return $error;
         }
     } else {
-        // Manager is on remote WordPress - use REST API
         $manager_base_url = get_option('watchtower_agent_manager_url');
 
         if (empty($manager_base_url)) {
@@ -296,7 +258,6 @@ function watchtower_agent_register_with_manager($username, $password) {
         if ($data && isset($data['success']) && $data['success']) {
             error_log('Watchtower Agent: Successfully registered with manager (remote)');
 
-            // Store manager URL and external site URL for password auto-sync after restore
             update_option('watchtower_manager_url', $manager_base_url);
             update_option('watchtower_external_site_url', $registration_data['site_url']);  // URL manager knows us by
             if (empty(get_option('watchtower_manager_key'))) {
@@ -312,13 +273,10 @@ function watchtower_agent_register_with_manager($username, $password) {
     }
 }
 
-// Deactivation hook
 register_deactivation_hook(__FILE__, 'watchtower_agent_deactivate');
 function watchtower_agent_deactivate() {
-    // Flush rewrite rules
     flush_rewrite_rules();
 
-    // Remove weekly backup cron
     $timestamp = wp_next_scheduled('watchtower_agent_weekly_backup');
     if ($timestamp) {
         wp_unschedule_event($timestamp, 'watchtower_agent_weekly_backup');
@@ -329,14 +287,11 @@ function watchtower_agent_deactivate() {
  * Try to enable Application Passwords in wp-config.php
  */
 function watchtower_agent_enable_app_passwords_in_config() {
-    // Find wp-config.php
     $config_file = null;
 
-    // Try standard location
     if (file_exists(ABSPATH . 'wp-config.php')) {
         $config_file = ABSPATH . 'wp-config.php';
     }
-    // Try one level up (for WordPress in subdirectory)
     elseif (file_exists(dirname(ABSPATH) . '/wp-config.php')) {
         $config_file = dirname(ABSPATH) . '/wp-config.php';
     }
@@ -353,16 +308,13 @@ function watchtower_agent_enable_app_passwords_in_config() {
         return false;
     }
 
-    // Check if WP_APPLICATION_PASSWORDS is set to false
     if (preg_match("/define\s*\(\s*['\"]WP_APPLICATION_PASSWORDS['\"]\s*,\s*false\s*\)/i", $config_content)) {
-        // Remove or comment out the line that disables Application Passwords
         $config_content = preg_replace(
             "/define\s*\(\s*['\"]WP_APPLICATION_PASSWORDS['\"]\s*,\s*false\s*\)\s*;/i",
             "// define( 'WP_APPLICATION_PASSWORDS', false ); // Disabled by Watchtower Agent",
             $config_content
         );
 
-        // Write back to file
         $result = file_put_contents($config_file, $config_content);
 
         if ($result !== false) {
@@ -381,16 +333,13 @@ function watchtower_agent_enable_app_passwords_in_config() {
  * Ensure UpdraftPlus plugin is installed and activated
  */
 function watchtower_agent_ensure_updraftplus() {
-    // Check if UpdraftPlus is already active
     if (is_plugin_active('updraftplus/updraftplus.php')) {
         error_log('Watchtower Agent: UpdraftPlus is already active');
         return true;
     }
 
-    // Check if UpdraftPlus is installed but not active
     $installed_plugins = get_plugins();
     if (isset($installed_plugins['updraftplus/updraftplus.php'])) {
-        // Activate it
         $result = activate_plugin('updraftplus/updraftplus.php');
         if (is_wp_error($result)) {
             error_log('Watchtower Agent: Failed to activate UpdraftPlus: ' . $result->get_error_message());
@@ -400,7 +349,6 @@ function watchtower_agent_ensure_updraftplus() {
         return true;
     }
 
-    // UpdraftPlus not installed - install it
     error_log('Watchtower Agent: Installing UpdraftPlus...');
 
     require_once ABSPATH . 'wp-admin/includes/file.php';
@@ -408,7 +356,6 @@ function watchtower_agent_ensure_updraftplus() {
     require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
     require_once ABSPATH . 'wp-admin/includes/plugin.php';
 
-    // Get plugin info
     $api = plugins_api('plugin_information', array(
         'slug' => 'updraftplus',
         'fields' => array(
@@ -432,7 +379,6 @@ function watchtower_agent_ensure_updraftplus() {
         return false;
     }
 
-    // Install plugin
     $upgrader = new Plugin_Upgrader(new WP_Ajax_Upgrader_Skin());
     $result = $upgrader->install($api->download_link);
 
@@ -446,7 +392,6 @@ function watchtower_agent_ensure_updraftplus() {
         return false;
     }
 
-    // Activate the plugin
     $activate_result = activate_plugin('updraftplus/updraftplus.php');
     if (is_wp_error($activate_result)) {
         error_log('Watchtower Agent: Failed to activate UpdraftPlus: ' . $activate_result->get_error_message());
@@ -471,13 +416,11 @@ function watchtower_agent_run_weekly_backup() {
 
     global $updraftplus;
 
-    // Trigger full backup (files + database)
     $result = $updraftplus->boot_backup(true, true);
 
     if ($result) {
         error_log('Watchtower Agent: Weekly backup started successfully');
 
-        // Schedule pruning after backup completes (wait 5 minutes)
         wp_schedule_single_event(time() + 300, 'watchtower_agent_prune_backups');
     } else {
         error_log('Watchtower Agent: Failed to start weekly backup');
@@ -496,20 +439,16 @@ function watchtower_agent_prune_old_backups() {
 
     error_log('Watchtower Agent: Pruning old backups...');
 
-    // Load UpdraftPlus admin if not loaded
     global $updraftplus_admin;
     if (!$updraftplus_admin || !method_exists($updraftplus_admin, 'delete_set')) {
         require_once WP_PLUGIN_DIR . '/updraftplus/admin.php';
         $updraftplus_admin = new UpdraftPlus_Admin();
     }
 
-    // Get backup history
     $backup_history = UpdraftPlus_Backup_History::get_history();
 
-    // Sort by timestamp (newest first)
     krsort($backup_history);
 
-    // Keep only 3 most recent
     $backups_to_keep = 3;
     $count = 0;
 
@@ -543,17 +482,14 @@ function watchtower_agent_execute_restore_callback($timestamp) {
 
     error_log('Watchtower Agent: Starting restore for backup timestamp: ' . $timestamp);
 
-    // Mark restore as in progress
     $job_id = md5(time() . rand());
     update_site_option('updraft_restore_in_progress', $job_id);
     update_site_option('watchtower_restore_progress', 10);
 
     global $updraftplus;
 
-    // Get all backup history
     $all_backups = UpdraftPlus_Backup_History::get_history();
 
-    // Find the specific backup
     if (!isset($all_backups[$timestamp])) {
         error_log('Watchtower Agent: Backup not found: ' . $timestamp);
         delete_site_option('updraft_restore_in_progress');
@@ -563,18 +499,14 @@ function watchtower_agent_execute_restore_callback($timestamp) {
 
     $backup_history = $all_backups[$timestamp];
 
-    // Add timestamp to backup_history - required by UpdraftPlus
     $backup_history['timestamp'] = $timestamp;
 
-    // Load required files
     require_once ABSPATH . 'wp-admin/includes/file.php';
     require_once ABSPATH . 'wp-admin/includes/class-wp-upgrader.php';
     require_once WP_PLUGIN_DIR . '/updraftplus/restorer.php';
     require_once WP_PLUGIN_DIR . '/updraftplus/includes/updraft-restorer-skin.php';
     require_once WP_PLUGIN_DIR . '/updraftplus/includes/class-filesystem-functions.php';
 
-    // Prepare components to restore
-    // IMPORTANT: UpdraftPlus expects an associative array like ["db" => "db", "plugins" => "plugins"]
     $entities_to_restore = array();
     if (!empty($backup_history['db'])) $entities_to_restore['db'] = 'db';
     if (!empty($backup_history['plugins'])) $entities_to_restore['plugins'] = 'plugins';
@@ -584,7 +516,6 @@ function watchtower_agent_execute_restore_callback($timestamp) {
 
     error_log('Watchtower Agent: Restoring entities: ' . implode(', ', array_keys($entities_to_restore)));
 
-    // Validate that backup files exist before attempting restore
     $updraft_dir = $updraftplus->backups_dir_location();
     $missing_files = array();
 
@@ -611,7 +542,6 @@ function watchtower_agent_execute_restore_callback($timestamp) {
         return; // Exit early
     }
 
-    // Save application passwords before restore (if database is being restored)
     $app_passwords_backup = null;
     if (isset($entities_to_restore['db'])) {
         $app_passwords_backup = array();
@@ -627,13 +557,10 @@ function watchtower_agent_execute_restore_callback($timestamp) {
             }
         }
 
-        // Store in filesystem (not database, as it will be overwritten)
         $backup_file = WP_CONTENT_DIR . '/watchtower-app-passwords-backup.json';
         file_put_contents($backup_file, json_encode($app_passwords_backup));
         error_log('Watchtower Agent: Saved ' . count($app_passwords_backup) . ' user application passwords');
 
-        // Also backup manager connection settings (will be overwritten by database restore)
-        // Include the external site URL that the manager uses to identify this agent
         $manager_settings = array(
             'manager_url' => get_option('watchtower_manager_url'),
             'manager_key' => get_option('watchtower_manager_key'),
@@ -644,8 +571,6 @@ function watchtower_agent_execute_restore_callback($timestamp) {
         error_log('Watchtower Agent: Saved manager settings: ' . $manager_settings['manager_url']);
     }
 
-    // Clean up potentially conflicting directories that might cause move failures
-    // These directories can conflict when restoring from backup
     $cleanup_dirs = array(
         WP_CONTENT_DIR . '/wflogs', // Wordfence logs
         WP_CONTENT_DIR . '/upgrade', // WordPress upgrade temp directory
@@ -654,7 +579,6 @@ function watchtower_agent_execute_restore_callback($timestamp) {
     foreach ($cleanup_dirs as $dir) {
         if (is_dir($dir)) {
             error_log('Watchtower Agent: Removing conflicting directory before restore: ' . $dir);
-            // Use recursive function to delete directory and contents
             try {
                 $files = new RecursiveIteratorIterator(
                     new RecursiveDirectoryIterator($dir, RecursiveDirectoryIterator::SKIP_DOTS),
@@ -674,18 +598,14 @@ function watchtower_agent_execute_restore_callback($timestamp) {
     try {
         update_site_option('watchtower_restore_progress', 20);
 
-        // Set up WP_Filesystem using UpdraftPlus's method
         error_log('Watchtower Agent: Setting up WP_Filesystem');
         $url_parameters = array(
             'backup_timestamp' => $timestamp,
             'job_id' => $job_id
         );
 
-        // Use UpdraftPlus's filesystem setup method which handles CLI context properly
-        // In CLI context (wp-cli), this should set up direct filesystem access
         $updraftplus->log("Ensuring WP_Filesystem is setup for a restore");
 
-        // For WP-CLI context, we can use direct filesystem access
         if (!defined('FS_METHOD')) {
             define('FS_METHOD', 'direct');
         }
@@ -702,28 +622,23 @@ function watchtower_agent_execute_restore_callback($timestamp) {
 
         update_site_option('watchtower_restore_progress', 25);
 
-        // Set up job data that UpdraftPlus expects
         $updraftplus->nonce = $job_id;
         $updraftplus->jobdata_set('job_type', 'restore');
         $updraftplus->jobdata_set('backup_timestamp', $timestamp);
         $updraftplus->jobdata_set('job_time_ms', microtime(true));
 
-        // Set which entities to restore in jobdata (required by UpdraftPlus)
         foreach ($entities_to_restore as $entity) {
             $updraftplus->jobdata_set('restore_' . $entity, 1);
         }
 
         error_log('Watchtower Agent: Jobdata set for restore: ' . print_r($updraftplus->jobdata_getarray($job_id), true));
 
-        // Create restorer instance with the backup set and a proper skin for logging
-        // Use global variable as UpdraftPlus expects
         global $updraftplus_restorer;
         $skin = new Updraft_Restorer_Skin();
         $updraftplus_restorer = new Updraft_Restorer($skin, $backup_history, false, array(), null);
 
         update_site_option('watchtower_restore_progress', 30);
 
-        // Perform the restore
         $updraftplus->log('Watchtower Agent: Calling perform_restore() with entities: ' . implode(', ', $entities_to_restore));
         $updraftplus->log('Watchtower Agent: Backup set structure: ' . print_r($backup_history, true));
         error_log('Watchtower Agent: Calling perform_restore() with entities: ' . implode(', ', $entities_to_restore));
@@ -734,13 +649,11 @@ function watchtower_agent_execute_restore_callback($timestamp) {
         $updraftplus->log('Watchtower Agent: perform_restore() returned: ' . var_export($result, true));
         error_log('Watchtower Agent: perform_restore() returned: ' . var_export($result, true));
 
-        // Clean up after restore
         $updraftplus_restorer->post_restore_clean_up($result);
 
         if ($result && !is_wp_error($result)) {
             error_log('Watchtower Agent: Restore completed successfully');
 
-            // Restore application passwords if we backed them up
             if (isset($entities_to_restore['db'])) {
                 $backup_file = WP_CONTENT_DIR . '/watchtower-app-passwords-backup.json';
                 if (file_exists($backup_file)) {
@@ -750,23 +663,17 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                         error_log('Watchtower Agent: Restoring application passwords for ' . count($saved_passwords) . ' users');
 
                         foreach ($saved_passwords as $user_id => $user_data) {
-                            // Find user by login (user ID may have changed if user was added/removed)
                             $user = get_user_by('login', $user_data['user_login']);
 
                             if ($user) {
-                                // Clear existing application passwords
                                 WP_Application_Passwords::delete_all_application_passwords($user->ID);
 
-                                // Restore each application password
                                 foreach ($user_data['passwords'] as $password_data) {
-                                    // Re-create the application password with the same hash
-                                    // Note: We're directly inserting into usermeta to preserve the hash
                                     $existing = get_user_meta($user->ID, '_application_passwords', true);
                                     if (!is_array($existing)) {
                                         $existing = array();
                                     }
 
-                                    // Add the password back with its original data
                                     $existing[] = $password_data;
                                     update_user_meta($user->ID, '_application_passwords', $existing);
                                 }
@@ -777,12 +684,10 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                             }
                         }
 
-                        // Clean up backup file
                         @unlink($backup_file);
                     }
                 }
 
-                // Restore manager connection settings from backup
                 $manager_settings_file = WP_CONTENT_DIR . '/watchtower-manager-settings-backup.json';
                 if (file_exists($manager_settings_file)) {
                     $manager_settings = json_decode(file_get_contents($manager_settings_file), true);
@@ -801,11 +706,8 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                     @unlink($manager_settings_file);
                 }
 
-                // After restoring passwords, also create a fresh "watchtower" password for API access
-                // This ensures the manager can still connect even if its stored password is outdated
                 $admin_user = get_user_by('login', 'admin');
                 if ($admin_user) {
-                    // Remove any existing "watchtower" passwords
                     $existing_passwords = WP_Application_Passwords::get_user_application_passwords($admin_user->ID);
                     foreach ($existing_passwords as $password) {
                         if (strpos($password['name'], 'watchtower') !== false) {
@@ -813,11 +715,8 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                         }
                     }
 
-                    // Create new watchtower password
                     $new_password = WP_Application_Passwords::create_new_application_password($admin_user->ID, array('name' => 'watchtower'));
                     if (!is_wp_error($new_password) && is_array($new_password) && isset($new_password[0])) {
-                        // create_new_application_password returns [0 => plaintext_password, 1 => array(password_data)]
-                        // But in some contexts, $new_password[0] might be an array, so we need to check
                         $plaintext_password = is_string($new_password[0]) ? $new_password[0] : (isset($new_password[0]['password']) ? $new_password[0]['password'] : null);
 
                         if (!$plaintext_password || !is_string($plaintext_password)) {
@@ -826,19 +725,14 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                             error_log('Watchtower Agent: Created new watchtower application password: ' . $plaintext_password);
                         }
 
-                        // Only proceed if we have a valid plaintext password
                         if ($plaintext_password && is_string($plaintext_password)) {
 
-                        // Store in a file so admin can retrieve it
                         file_put_contents(WP_CONTENT_DIR . '/watchtower-api-password.txt', $plaintext_password);
 
-                        // Also update the manager's stored password if we can reach it
-                        // This makes the credentials automatically stay in sync after restore
                         $manager_url = get_option('watchtower_manager_url');
                         $manager_key = get_option('watchtower_manager_key');
                         $external_site_url = get_option('watchtower_external_site_url');
 
-                        // Log to persistent file (won't be wiped by database restore)
                         $restore_log = WP_CONTENT_DIR . '/watchtower-restore.log';
                         file_put_contents($restore_log, date('Y-m-d H:i:s') . " - Created new password: $plaintext_password\n", FILE_APPEND);
                         file_put_contents($restore_log, date('Y-m-d H:i:s') . " - Manager URL: $manager_url\n", FILE_APPEND);
@@ -889,7 +783,6 @@ function watchtower_agent_execute_restore_callback($timestamp) {
         update_site_option('watchtower_restore_progress', -1); // Error
     }
 
-    // Clean up
     delete_site_option('updraft_restore_in_progress');
     sleep(2); // Keep progress visible for a moment
     delete_site_option('watchtower_restore_progress');
@@ -901,21 +794,17 @@ function watchtower_agent_execute_restore_callback($timestamp) {
  * Uses static variable to avoid redundant checks during the same request
  */
 function watchtower_agent_check_wordfence_app_password_block() {
-    // Use static variable to avoid checking multiple times per request
     static $checked = false;
     if ($checked) {
         return false;
     }
     $checked = true;
 
-    // Check if Wordfence is installed and active
     if (!is_plugin_active('wordfence/wordfence.php')) {
         return false; // Wordfence not active
     }
 
-    // Check if Wordfence classes are loaded
     if (!class_exists('wfConfig')) {
-        // Try to load Wordfence
         $wordfence_file = WP_PLUGIN_DIR . '/wordfence/wordfence.php';
         if (file_exists($wordfence_file)) {
             require_once $wordfence_file;
@@ -924,16 +813,13 @@ function watchtower_agent_check_wordfence_app_password_block() {
         }
     }
 
-    // Check if wfConfig class is available
     if (!class_exists('wfConfig')) {
         return false;
     }
 
-    // Check if Wordfence is blocking Application Passwords
     $is_blocked = wfConfig::get('loginSec_disableApplicationPasswords');
 
     if ($is_blocked) {
-        // Disable the blocking
         wfConfig::set('loginSec_disableApplicationPasswords', 0);
         error_log('Watchtower Agent: Disabled Wordfence Application Password blocking (loginSec_disableApplicationPasswords)');
         return true;

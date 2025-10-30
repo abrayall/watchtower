@@ -23,7 +23,6 @@ class Watchtower_Manager {
      * Initialize the plugin
      */
     public function init() {
-        // Register REST API routes
         add_action('rest_api_init', array($this, 'register_routes'));
     }
 
