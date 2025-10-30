@@ -64,7 +64,7 @@ class Watchtower_Agent_Admin_Settings {
         }
 
         // Check if manager is installed locally (no need for remote URL)
-        $manager_active = is_plugin_active('remote-manager/remote-manager.php');
+        $manager_active = is_plugin_active('watchtower-manager/manager.php');
         if ($manager_active) {
             return;
         }
@@ -136,8 +136,8 @@ class Watchtower_Agent_Admin_Settings {
         $registration_status = get_option('watchtower_agent_registration_status', '');
 
         // Check if manager is installed locally
-        $manager_local = file_exists(WP_PLUGIN_DIR . '/remote-manager/remote-manager.php');
-        $manager_active = is_plugin_active('remote-manager/remote-manager.php');
+        $manager_local = file_exists(WP_PLUGIN_DIR . '/watchtower-manager/manager.php');
+        $manager_active = is_plugin_active('watchtower-manager/manager.php');
 
         ?>
         <div class="wrap">

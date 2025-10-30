@@ -313,7 +313,92 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
+        // Fetch and save backups data
+        $this->fetch_and_save_backups($site_url, $agent, $request_args);
+
         return $this->save_health_data($site_url, $dynamic_data);
+    }
+
+    /**
+     * Fetch and save backups data from agent
+     */
+    private function fetch_and_save_backups($site_url, $agent, $request_args) {
+        // Get translated URL for backups endpoint
+        $backups_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups');
+
+        // Add authentication headers
+        $backups_request_args = array_merge($request_args, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+        ));
+
+        // Fetch backups data
+        $backups_response = wp_remote_get($backups_url, $backups_request_args);
+
+        if (is_wp_error($backups_response)) {
+            // Save error state
+            $backups_data = array(
+                'success' => false,
+                'error' => $backups_response->get_error_message(),
+                'fetched_at' => current_time('mysql'),
+            );
+        } else {
+            $backups_body = wp_remote_retrieve_body($backups_response);
+            $backups_data = json_decode($backups_body, true);
+
+            if (!$backups_data) {
+                $backups_data = array(
+                    'success' => false,
+                    'error' => 'Invalid response from agent',
+                    'fetched_at' => current_time('mysql'),
+                );
+            } else {
+                $backups_data['fetched_at'] = current_time('mysql');
+            }
+        }
+
+        // Save backups data to backups.json
+        $this->save_backups_data($site_url, $backups_data);
+    }
+
+    /**
+     * Save backups data to backups.json
+     */
+    private function save_backups_data($site_url, $backups_data) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'backups.json';
+
+        // Ensure site directory exists
+        if (!file_exists($site_dir)) {
+            wp_mkdir_p($site_dir);
+        }
+
+        $json = json_encode($backups_data, JSON_PRETTY_PRINT);
+        $result = file_put_contents($file_path, $json);
+
+        return $result !== false;
+    }
+
+    /**
+     * Get backups data from backups.json
+     */
+    public function get_backups_data($site_url) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'backups.json';
+
+        if (!file_exists($file_path)) {
+            return null;
+        }
+
+        $json = file_get_contents($file_path);
+        $backups_data = json_decode($json, true);
+
+        if (!is_array($backups_data)) {
+            return null;
+        }
+
+        return $backups_data;
     }
 
     /**

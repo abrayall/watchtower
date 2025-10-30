@@ -93,15 +93,15 @@ echo.
 
 REM Build Agent Plugin
 echo Building Watchtower Agent plugin...
-set "AGENT_DIR=%BUILD_DIR%\remote-agent"
+set "AGENT_DIR=%BUILD_DIR%\watchtower-agent"
 mkdir "%AGENT_DIR%"
 
 REM Copy agent files
-xcopy /E /I /Q "remote-agent\*" "%AGENT_DIR%\" > nul
+xcopy /E /I /Q "agent\*" "%AGENT_DIR%\" > nul
 copy /Y "%VERSION_FILE%" "%AGENT_DIR%\" > nul
 
 REM Update version in plugin header
-powershell -Command "(Get-Content '%AGENT_DIR%\remote-agent.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%AGENT_DIR%\remote-agent.php'"
+powershell -Command "(Get-Content '%AGENT_DIR%\agent.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%AGENT_DIR%\agent.php'"
 
 REM Remove development files
 del /S /Q "%AGENT_DIR%\.DS_Store" 2>nul
@@ -111,7 +111,7 @@ del /S /Q "%AGENT_DIR%\*~" 2>nul
 
 REM Create ZIP (requires PowerShell)
 cd /d "%BUILD_DIR%"
-powershell -Command "Compress-Archive -Path 'remote-agent' -DestinationPath 'watchtower-agent-%VERSION%.zip' -Force"
+powershell -Command "Compress-Archive -Path 'watchtower-agent' -DestinationPath 'watchtower-agent-%VERSION%.zip' -Force"
 echo [32m✓ Created: watchtower-agent-%VERSION%.zip[0m
 
 REM Store agent ZIP for bundling with manager
@@ -120,15 +120,15 @@ set "AGENT_ZIP=watchtower-agent-%VERSION%.zip"
 REM Build Manager Plugin
 echo.
 echo Building Watchtower Manager plugin...
-set "MANAGER_DIR=%BUILD_DIR%\remote-manager"
+set "MANAGER_DIR=%BUILD_DIR%\watchtower-manager"
 mkdir "%MANAGER_DIR%"
 
 REM Copy manager files
-xcopy /E /I /Q "%SCRIPT_DIR%remote-manager\*" "%MANAGER_DIR%\" > nul
+xcopy /E /I /Q "%SCRIPT_DIR%manager\*" "%MANAGER_DIR%\" > nul
 copy /Y "%VERSION_FILE%" "%MANAGER_DIR%\" > nul
 
 REM Update version in plugin header
-powershell -Command "(Get-Content '%MANAGER_DIR%\remote-manager.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%MANAGER_DIR%\remote-manager.php'"
+powershell -Command "(Get-Content '%MANAGER_DIR%\manager.php') -replace '\* Version: .*', '* Version: %VERSION%' | Set-Content '%MANAGER_DIR%\manager.php'"
 
 REM Create assets directory and bundle agent plugin
 mkdir "%MANAGER_DIR%\assets"
@@ -142,13 +142,13 @@ del /S /Q "%MANAGER_DIR%\*.swo" 2>nul
 del /S /Q "%MANAGER_DIR%\*~" 2>nul
 
 REM Create ZIP
-powershell -Command "Compress-Archive -Path 'remote-manager' -DestinationPath 'watchtower-manager-%VERSION%.zip' -Force"
+powershell -Command "Compress-Archive -Path 'watchtower-manager' -DestinationPath 'watchtower-manager-%VERSION%.zip' -Force"
 echo [32m✓ Created: watchtower-manager-%VERSION%.zip[0m
 
 REM Clean up temporary directories
 cd /d "%SCRIPT_DIR%"
-rmdir /s /q "%BUILD_DIR%\remote-agent"
-rmdir /s /q "%BUILD_DIR%\remote-manager"
+rmdir /s /q "%BUILD_DIR%\watchtower-agent"
+rmdir /s /q "%BUILD_DIR%\watchtower-manager"
 
 REM Summary
 echo.

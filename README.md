@@ -14,7 +14,7 @@ Central management plugin that provides a dashboard to monitor and manage multip
 - Network-wide plugin management capabilities
 - Multisite support with subdirectory installations
 
-**Location:** `remote-manager/`
+**Location:** `manager/`
 
 ### Watchtower Agent
 Agent plugin that runs on managed WordPress sites and provides REST API endpoints for remote management.
@@ -28,17 +28,17 @@ Agent plugin that runs on managed WordPress sites and provides REST API endpoint
 - Backup management integration (UpdraftPlus)
 - Update management capabilities
 
-**Location:** `remote-agent/`
+**Location:** `agent/`
 
 ## Installation
 
 ### Manager Plugin
-1. Upload `remote-manager` to `/wp-content/plugins/`
+1. Upload `watchtower-manager` to `/wp-content/plugins/`
 2. Activate the plugin through the 'Plugins' menu in WordPress
 3. Access the dashboard at **WP Admin → Sites**
 
 ### Agent Plugin
-1. Upload `remote-agent` to `/wp-content/plugins/` on each site you want to manage
+1. Upload `watchtower-agent` to `/wp-content/plugins/` on each site you want to manage
 2. Activate the plugin through the 'Plugins' menu in WordPress
 3. Configure the manager URL at **Settings → Remote Agent**
 4. Click "Register with Manager" to connect to your central management site
@@ -47,8 +47,8 @@ Agent plugin that runs on managed WordPress sites and provides REST API endpoint
 
 ### Manager Plugin Structure
 ```
-remote-manager/
-├── remote-manager.php                # Main plugin file
+watchtower-manager/
+├── manager.php                       # Main plugin file
 ├── includes/
 │   ├── class-watchtower-manager.php  # Core manager class
 │   ├── class-agent-storage.php       # Agent registration and data storage
@@ -68,8 +68,8 @@ wp-content/watchtower-manager/
 
 ### Agent Plugin Structure
 ```
-remote-agent/
-├── remote-agent.php                    # Main plugin file
+watchtower-agent/
+├── agent.php                           # Main plugin file
 ├── includes/
 │   ├── class-watchtower-agent.php      # Core plugin class
 │   ├── class-rest-api-controller.php   # REST API routes and health endpoint
