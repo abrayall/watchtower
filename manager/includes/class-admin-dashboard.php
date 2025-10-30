@@ -31,13 +31,10 @@ class Watchtower_Manager_Admin_Dashboard {
      * Initialize admin dashboard
      */
     public function init() {
-        // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
 
-        // Enqueue admin styles
         add_action('admin_enqueue_scripts', array($this, 'enqueue_admin_assets'));
 
-        // Handle AJAX actions
         add_action('wp_ajax_watchtower_manager_remove_agent', array($this, 'ajax_remove_agent'));
         add_action('wp_ajax_watchtower_manager_update_agent', array($this, 'ajax_update_agent'));
         add_action('wp_ajax_watchtower_manager_scan_agent', array($this, 'ajax_scan_agent'));
@@ -67,7 +64,6 @@ class Watchtower_Manager_Admin_Dashboard {
             30                        // Position
         );
 
-        // Add submenu items
         add_submenu_page(
             'watchtower-manager',
             'All Sites',
@@ -86,7 +82,6 @@ class Watchtower_Manager_Admin_Dashboard {
             array($this, 'render_settings')
         );
 
-        // Hidden submenu for site details (not shown in menu)
         add_submenu_page(
             null,  // Hidden from menu
             'Site Details',
@@ -101,719 +96,58 @@ class Watchtower_Manager_Admin_Dashboard {
      * Enqueue admin assets
      */
     public function enqueue_admin_assets($hook) {
-        // Only load on our admin pages
         if (strpos($hook, 'watchtower-manager') === false) {
             return;
         }
 
-        // Enqueue WordPress default styles
         wp_enqueue_style('wp-color-picker');
-
-        // Enqueue jQuery UI for datepicker
         wp_enqueue_script('jquery-ui-datepicker');
         wp_enqueue_style('jquery-ui-css', 'https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.min.css');
 
-        // Add inline CSS
-        wp_add_inline_style('wp-admin', $this->get_admin_css());
+        if (isset($_GET['site'])) {
+            wp_enqueue_style(
+                'watchtower-details',
+                plugins_url('assets/css/details.css', dirname(__FILE__)),
+                array(),
+                WATCHTOWER_MANAGER_VERSION
+            );
+
+            wp_enqueue_script(
+                'watchtower-details',
+                plugins_url('assets/js/details.js', dirname(__FILE__)),
+                array('jquery', 'jquery-ui-datepicker'),
+                WATCHTOWER_MANAGER_VERSION,
+                true
+            );
+
+            wp_localize_script('watchtower-details', 'watchtower', array(
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('watchtower_manager_nonce'),
+                'siteUrl' => $_GET['site']
+            ));
+        } else {
+            wp_enqueue_style(
+                'watchtower-dashboard',
+                plugins_url('assets/css/dashboard.css', dirname(__FILE__)),
+                array(),
+                WATCHTOWER_MANAGER_VERSION
+            );
+
+            wp_enqueue_script(
+                'watchtower-dashboard',
+                plugins_url('assets/js/dashboard.js', dirname(__FILE__)),
+                array('jquery'),
+                WATCHTOWER_MANAGER_VERSION,
+                true
+            );
+
+            wp_localize_script('watchtower-dashboard', 'watchtower', array(
+                'ajaxurl' => admin_url('admin-ajax.php'),
+                'nonce' => wp_create_nonce('watchtower_manager_nonce')
+            ));
+        }
     }
 
-    /**
-     * Get admin CSS
-     */
-    private function get_admin_css() {
-        return '
-            .watchtower-manager-dashboard {
-                margin: 20px 0;
-            }
-            .watchtower-manager-dashboard .stats-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
-                gap: 20px;
-                margin-bottom: 30px;
-            }
-            .watchtower-manager-dashboard .stat-card {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 8px;
-                padding: 24px;
-                box-shadow: 0 2px 4px rgba(0,0,0,.06);
-                position: relative;
-                overflow: hidden;
-                transition: all 0.3s ease;
-            }
-            .watchtower-manager-dashboard .stat-card.filter-card {
-                cursor: pointer;
-            }
-            .watchtower-manager-dashboard .stat-card:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 6px 12px rgba(0,0,0,.12);
-            }
-            .watchtower-manager-dashboard .stat-card.filter-active {
-                border: 2px solid #2271b1;
-                box-shadow: 0 4px 8px rgba(34, 113, 177, 0.2);
-            }
-            .watchtower-manager-dashboard .stat-card::before {
-                content: \'\';
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 4px;
-                height: 100%;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-total::before {
-                background: linear-gradient(180deg, #2271b1, #135e96);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-total {
-                background: linear-gradient(135deg, #ffffff 0%, #f0f6fc 100%);
-            }
-            /* Healthy card - Green when majority */
-            .watchtower-manager-dashboard .stat-card.stat-healthy-good::before {
-                background: linear-gradient(180deg, #00a32a, #007a20);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-good {
-                background: linear-gradient(135deg, #ffffff 0%, #f0f9f3 100%);
-            }
-            /* Healthy card - Yellow when minority */
-            .watchtower-manager-dashboard .stat-card.stat-healthy-warning::before {
-                background: linear-gradient(180deg, #dba617, #b98900);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-warning {
-                background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);
-            }
-            /* Healthy card - Red when 0 */
-            .watchtower-manager-dashboard .stat-card.stat-healthy-critical::before {
-                background: linear-gradient(180deg, #d63638, #b91c1c);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-critical {
-                background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
-            }
-            /* Unhealthy card - Green when 0 */
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-none::before {
-                background: linear-gradient(180deg, #00a32a, #007a20);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-none {
-                background: linear-gradient(135deg, #ffffff 0%, #f0f9f3 100%);
-            }
-            /* Unhealthy card - Yellow when minority */
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-warning::before {
-                background: linear-gradient(180deg, #dba617, #b98900);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-warning {
-                background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);
-            }
-            /* Unhealthy card - Red when majority */
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-critical::before {
-                background: linear-gradient(180deg, #d63638, #b91c1c);
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-critical {
-                background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
-            }
-            .watchtower-manager-dashboard .stat-card h3 {
-                margin: 0 0 12px 0;
-                font-size: 13px;
-                color: #646970;
-                font-weight: 600;
-                text-transform: uppercase;
-                letter-spacing: 0.5px;
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-            }
-            .watchtower-manager-dashboard .stat-card h3 .dashicons {
-                font-size: 20px;
-                width: 20px;
-                height: 20px;
-                opacity: 0.4;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-total h3 .dashicons {
-                color: #2271b1;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-good h3 .dashicons {
-                color: #00a32a;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-warning h3 .dashicons {
-                color: #dba617;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-healthy-critical h3 .dashicons {
-                color: #d63638;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-none h3 .dashicons {
-                color: #00a32a;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-warning h3 .dashicons {
-                color: #dba617;
-            }
-            .watchtower-manager-dashboard .stat-card.stat-unhealthy-critical h3 .dashicons {
-                color: #d63638;
-            }
-            .watchtower-manager-dashboard .stat-card .stat-value {
-                font-size: 42px;
-                font-weight: 700;
-                color: #1d2327;
-                line-height: 1;
-            }
-            .watchtower-manager-dashboard .sites-table {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 4px;
-                box-shadow: 0 1px 1px rgba(0,0,0,.04);
-                display: none; /* Hidden by default, shown on desktop only */
-            }
-            .watchtower-manager-dashboard .sites-table table {
-                width: 100%;
-                border-collapse: collapse;
-            }
-            .watchtower-manager-dashboard .sites-table th {
-                background: #f6f7f7;
-                padding: 12px;
-                text-align: left;
-                border-bottom: 1px solid #ccd0d4;
-                font-weight: 600;
-                color: #1d2327;
-            }
-            .watchtower-manager-dashboard .sites-table td {
-                padding: 12px;
-                border-bottom: 1px solid #f0f0f1;
-            }
-            .watchtower-manager-dashboard .sites-table tr:last-child td {
-                border-bottom: none;
-            }
-            .watchtower-manager-dashboard .sites-table tr.clickable-row {
-                cursor: pointer;
-            }
-            .watchtower-manager-dashboard .sites-table tr.clickable-row:hover {
-                background: #f6f7f7;
-            }
-            .watchtower-manager-dashboard .sites-table tr:hover {
-                background: #f6f7f7;
-            }
-            .watchtower-manager-dashboard .site-url {
-                font-weight: 600;
-                color: #2271b1;
-            }
-            .watchtower-manager-dashboard .site-url a {
-                text-decoration: none;
-                display: flex;
-                align-items: center;
-                gap: 10px;
-            }
-            .watchtower-manager-dashboard .site-url a:hover strong {
-                text-decoration: underline;
-            }
-            .watchtower-manager-dashboard .site-url a:focus {
-                outline: none;
-                box-shadow: none;
-            }
-            .watchtower-manager-dashboard .site-icon {
-                width: 24px;
-                height: 24px;
-                border-radius: 3px;
-                flex-shrink: 0;
-                text-decoration: none !important;
-            }
-            .watchtower-manager-dashboard .site-icon-placeholder {
-                width: 24px;
-                height: 24px;
-                background: #f0f0f1;
-                border-radius: 3px;
-                display: flex;
-                align-items: center;
-                justify-content: center;
-                flex-shrink: 0;
-                text-decoration: none !important;
-            }
-            .watchtower-manager-dashboard .site-icon-placeholder .dashicons {
-                font-size: 16px;
-                width: 16px;
-                height: 16px;
-                color: #8c8f94;
-            }
-            .watchtower-manager-dashboard .badge {
-                display: inline-block;
-                padding: 3px 8px;
-                border-radius: 3px;
-                font-size: 11px;
-                font-weight: 600;
-                text-transform: uppercase;
-            }
-            .watchtower-manager-dashboard .badge-success {
-                background: #d5f3e5;
-                color: #00a32a;
-            }
-            .watchtower-manager-dashboard .badge-warning {
-                background: #fcf0d2;
-                color: #996800;
-            }
-            .watchtower-manager-dashboard .badge-error {
-                background: #fcdddd;
-                color: #d63638;
-            }
-            .watchtower-manager-dashboard .health-badge {
-                display: inline-flex;
-                align-items: center;
-                gap: 4px;
-                padding: 4px 10px;
-                border-radius: 4px;
-                font-size: 12px;
-                font-weight: 600;
-            }
-            .watchtower-manager-dashboard .health-badge .dashicons {
-                font-size: 16px;
-                width: 16px;
-                height: 16px;
-            }
-            .watchtower-manager-dashboard .health-badge-healthy {
-                background: #d5f3e5;
-                color: #00a32a;
-            }
-            .watchtower-manager-dashboard .health-badge-warning {
-                background: #fcf0d2;
-                color: #dba617;
-            }
-            .watchtower-manager-dashboard .health-badge-critical {
-                background: #fcdddd;
-                color: #d63638;
-            }
-            .watchtower-manager-dashboard .health-badge-unknown {
-                background: #f0f0f1;
-                color: #646970;
-            }
-            .watchtower-manager-dashboard .actions {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
-            .watchtower-manager-dashboard .button-small {
-                padding: 4px 8px;
-                font-size: 12px;
-                height: auto;
-            }
-            .watchtower-manager-dashboard .empty-state {
-                text-align: center;
-                padding: 60px 20px;
-                color: #646970;
-            }
-            .watchtower-manager-dashboard .empty-state .dashicons {
-                font-size: 80px;
-                width: 80px;
-                height: 80px;
-                color: #c3c4c7;
-                margin-bottom: 20px;
-            }
-            .watchtower-manager-dashboard .empty-state h3 {
-                font-size: 18px;
-                margin-bottom: 10px;
-            }
-
-            /* Mobile Sites Grid - Shown by default, hidden on desktop */
-            .watchtower-manager-dashboard .mobile-sites-grid {
-                display: block;
-            }
-
-            /* Mobile site tile styles - always applied when tiles are visible */
-            .mobile-site-tile {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 8px;
-                padding: 16px;
-                margin-bottom: 16px;
-                cursor: pointer;
-                transition: all 0.2s;
-            }
-
-            .mobile-site-tile:hover {
-                background: #f6f7f7;
-                box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-            }
-
-            .mobile-site-header {
-                display: flex;
-                justify-content: space-between;
-                align-items: flex-start;
-                margin-bottom: 12px;
-                gap: 12px;
-            }
-
-            .mobile-site-title {
-                flex: 1;
-                min-width: 0;
-            }
-
-            .mobile-site-title a {
-                display: flex;
-                align-items: center;
-                gap: 10px;
-                text-decoration: none;
-                color: #2271b1;
-            }
-
-            .mobile-site-title a:focus {
-                outline: none;
-                box-shadow: none;
-            }
-
-            .mobile-site-title strong {
-                font-size: 16px;
-                color: #1d2327;
-                word-break: break-word;
-            }
-
-            .mobile-site-health {
-                flex-shrink: 0;
-            }
-
-            .mobile-site-info {
-                padding: 12px 0;
-                border-top: 1px solid #f0f0f1;
-                border-bottom: 1px solid #f0f0f1;
-                margin-bottom: 12px;
-            }
-
-            .mobile-site-meta {
-                font-size: 12px;
-                color: #646970;
-                margin-bottom: 6px;
-                word-break: break-word;
-            }
-
-            .mobile-site-versions {
-                font-size: 12px;
-                color: #646970;
-                margin-bottom: 6px;
-            }
-
-            .mobile-site-scanned {
-                font-size: 12px;
-                color: #646970;
-            }
-
-            .mobile-site-actions {
-                display: flex;
-                gap: 8px;
-                flex-wrap: wrap;
-            }
-
-            .mobile-site-actions .button {
-                flex: 1;
-                min-width: 80px;
-                text-align: center;
-            }
-
-            /* Desktop layout - show table and stats, hide mobile grid */
-            @media (min-width: 783px) {
-                .watchtower-manager-dashboard .stats-grid {
-                    display: grid;
-                }
-                .watchtower-manager-dashboard .sites-table {
-                    display: block;
-                }
-                .watchtower-manager-dashboard .mobile-sites-grid {
-                    display: none;
-                }
-            }
-
-            /* Site Details Page Styles */
-            .health-status-card {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 8px;
-                padding: 25px 30px;
-                margin-bottom: 20px;
-                box-shadow: 0 2px 4px rgba(0,0,0,.05);
-                display: flex;
-                align-items: flex-start;
-                gap: 25px;
-            }
-            .health-status-card.healthy {
-                border-left: 4px solid #00a32a;
-            }
-            .health-status-card.warning {
-                border-left: 4px solid #dba617;
-            }
-            .health-status-card.critical {
-                border-left: 4px solid #d63638;
-            }
-            .health-status-icon {
-                font-size: 64px;
-                width: 64px;
-                height: 64px;
-                flex-shrink: 0;
-            }
-            .health-status-icon.healthy {
-                color: #00a32a;
-            }
-            .health-status-icon.warning {
-                color: #dba617;
-            }
-            .health-status-icon.critical {
-                color: #d63638;
-            }
-            .health-status-content {
-                flex: 1;
-                display: flex;
-                gap: 20px;
-            }
-            .health-status-info {
-                flex: 1;
-            }
-            .health-status-actions {
-                display: flex;
-                flex-direction: row;
-                gap: 10px;
-                align-items: flex-start;
-            }
-            .health-status-title {
-                font-size: 28px;
-                font-weight: 600;
-                margin-bottom: 12px;
-                color: #2271b1;
-            }
-            .health-status-title > div {
-                margin-top: 8px;
-            }
-            .health-status-subtitle {
-                font-size: 16px;
-                font-weight: 600;
-                margin-bottom: 20px;
-            }
-            .health-status-subtitle.healthy {
-                color: #00a32a;
-            }
-            .health-status-subtitle.warning {
-                color: #dba617;
-            }
-            .health-status-subtitle.critical {
-                color: #d63638;
-            }
-            .health-status-btn {
-                display: inline-flex;
-                align-items: center;
-                justify-content: center;
-                gap: 6px;
-                padding: 8px 16px;
-                background: #2271b1;
-                color: #fff;
-                text-decoration: none;
-                border-radius: 4px;
-                font-size: 13px;
-                font-weight: 500;
-                transition: background-color 0.2s;
-                white-space: nowrap;
-                width: 120px;
-            }
-            .health-status-btn:hover {
-                background: #135e96;
-                color: #fff;
-            }
-            .health-status-btn .dashicons {
-                font-size: 16px;
-                width: 16px;
-                height: 16px;
-            }
-            .health-status-meta {
-                margin-top: 12px;
-            }
-            .health-status-meta table {
-                border-collapse: collapse;
-                font-size: 13px;
-            }
-            .health-status-meta td {
-                padding: 3px 0;
-            }
-            .health-status-meta td:first-child {
-                font-weight: 600;
-                color: #1d2327;
-                width: 100px;
-                padding-right: 15px;
-            }
-            .health-status-meta td:last-child {
-                color: #50575e;
-            }
-            .health-status-timestamp {
-                color: #646970;
-                font-size: 12px;
-                margin-top: 10px;
-            }
-            .health-status-actions-mobile {
-                display: none;
-                gap: 10px;
-                margin-top: 20px;
-                padding-top: 20px;
-                border-top: 1px solid #f0f0f1;
-            }
-
-            /* Mobile Responsive */
-            @media (max-width: 782px) {
-                .health-status-card {
-                    flex-direction: column;
-                    align-items: flex-start;
-                }
-                .health-status-content {
-                    flex-direction: column;
-                    width: 100%;
-                }
-                .health-status-actions {
-                    display: none;
-                }
-                .health-status-actions-mobile {
-                    display: flex;
-                    flex-direction: row;
-                    flex-wrap: wrap;
-                }
-                .health-status-actions-mobile .health-status-btn {
-                    flex: 1;
-                    min-width: 140px;
-                }
-                .health-status-title {
-                    font-size: 22px;
-                }
-                .health-status-icon {
-                    font-size: 48px;
-                    width: 48px;
-                    height: 48px;
-                }
-            }
-
-            .metrics-grid {
-                display: grid;
-                grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
-                gap: 20px;
-                margin-bottom: 20px;
-            }
-            .metric-tile {
-                background: #fff;
-                border: 1px solid #ccd0d4;
-                border-radius: 8px;
-                padding: 24px;
-                box-shadow: 0 2px 4px rgba(0,0,0,.06);
-                position: relative;
-                overflow: hidden;
-                transition: all 0.3s ease;
-            }
-            .metric-tile:hover {
-                transform: translateY(-4px);
-                box-shadow: 0 6px 12px rgba(0,0,0,.12);
-            }
-            .metric-tile::before {
-                content: \'\';
-                position: absolute;
-                top: 0;
-                left: 0;
-                width: 4px;
-                height: 100%;
-            }
-            .metric-tile.healthy::before {
-                background: linear-gradient(180deg, #00a32a, #007a20);
-            }
-            .metric-tile.healthy {
-                background: linear-gradient(135deg, #ffffff 0%, #f0f9f3 100%);
-            }
-            .metric-tile.warning::before {
-                background: linear-gradient(180deg, #dba617, #b98900);
-            }
-            .metric-tile.warning {
-                background: linear-gradient(135deg, #ffffff 0%, #fffbf0 100%);
-            }
-            .metric-tile.critical::before {
-                background: linear-gradient(180deg, #d63638, #b91c1c);
-            }
-            .metric-tile.critical {
-                background: linear-gradient(135deg, #ffffff 0%, #fef2f2 100%);
-            }
-            .metric-header {
-                display: flex;
-                align-items: center;
-                margin-bottom: 15px;
-            }
-            .metric-icon {
-                font-size: 32px;
-                width: 32px;
-                height: 32px;
-                margin-right: 12px;
-                color: #646970;
-            }
-            .metric-icon.healthy {
-                color: #00a32a;
-            }
-            .metric-icon.warning {
-                color: #dba617;
-            }
-            .metric-icon.critical {
-                color: #d63638;
-            }
-            .metric-title {
-                font-size: 14px;
-                font-weight: 600;
-                color: #1d2327;
-                margin: 0;
-            }
-            .metric-value {
-                font-size: 36px;
-                font-weight: 700;
-                color: #1d2327;
-                margin-bottom: 8px;
-                line-height: 1;
-            }
-            .metric-subtitle {
-                font-size: 12px;
-                color: #646970;
-                margin-bottom: 15px;
-            }
-            .metric-details {
-                font-size: 13px;
-                color: #50575e;
-                line-height: 1.6;
-            }
-            .metric-details div {
-                margin-bottom: 5px;
-            }
-            .progress-bar {
-                width: 100%;
-                height: 8px;
-                background: #f0f0f1;
-                border-radius: 4px;
-                overflow: hidden;
-                margin-top: 10px;
-            }
-            .progress-fill {
-                height: 100%;
-                border-radius: 4px;
-                transition: width 0.3s ease;
-            }
-            .progress-fill.healthy {
-                background: linear-gradient(90deg, #00a32a, #00d84a);
-            }
-            .progress-fill.warning {
-                background: linear-gradient(90deg, #dba617, #ffb900);
-            }
-            .progress-fill.critical {
-                background: linear-gradient(90deg, #d63638, #ff4444);
-            }
-            .copy-credentials-btn:focus,
-            .copy-credentials-btn:active,
-            .copy-token-btn:focus,
-            .copy-token-btn:active {
-                outline: none !important;
-                border: none !important;
-                box-shadow: none !important;
-            }
-            .backup-component-badge {
-                display: inline-block;
-                padding: 3px 8px;
-                margin: 2px;
-                background: #f0f0f1;
-                border-radius: 3px;
-                font-size: 11px;
-                font-weight: 500;
-                color: #2c3338;
-                text-transform: capitalize;
-            }
-            .backup-component-badge:first-child {
-                background: #e5f5fa;
-                color: #007cba;
-            }
-        ';
-    }
 
     /**
      * Render dashboard page
@@ -822,17 +156,14 @@ class Watchtower_Manager_Admin_Dashboard {
         $agents = $this->storage->get_all_agents();
         $agent_count = count($agents);
 
-        // Calculate stats and prepare agents with health status
         $healthy_count = 0;
         $unhealthy_count = 0;
         $agents_with_health = array();
 
         foreach ($agents as $agent) {
-            // Get health data for each agent
             $health_data = $this->health_storage->get_health_data($agent['site_url']);
             $health_status = $this->determine_health_status($health_data);
 
-            // Add health status to agent for sorting
             $agent['health_status'] = $health_status;
             $agents_with_health[] = $agent;
 
@@ -843,25 +174,20 @@ class Watchtower_Manager_Admin_Dashboard {
             }
         }
 
-        // Sort agents: unhealthy first, then alphabetically by site name/URL
         usort($agents_with_health, function($a, $b) {
-            // Determine sort priority (unhealthy = 0, healthy/unknown = 1)
             $a_priority = ($a['health_status'] === 'warning' || $a['health_status'] === 'critical') ? 0 : 1;
             $b_priority = ($b['health_status'] === 'warning' || $b['health_status'] === 'critical') ? 0 : 1;
 
-            // If different priorities, sort by priority
             if ($a_priority !== $b_priority) {
                 return $a_priority - $b_priority;
             }
 
-            // Same priority, sort alphabetically by site name or URL
             $a_name = isset($a['site_name']) ? $a['site_name'] : $a['site_url'];
             $b_name = isset($b['site_name']) ? $b['site_name'] : $b['site_url'];
 
             return strcasecmp($a_name, $b_name);
         });
 
-        // Replace agents with sorted version
         $agents = $agents_with_health;
 
         ?>
@@ -884,7 +210,6 @@ class Watchtower_Manager_Admin_Dashboard {
                         <div class="stat-value"><?php echo $agent_count; ?></div>
                     </div>
                     <?php
-                    // Determine healthy card status (reverse of unhealthy)
                     $healthy_status = 'stat-healthy-critical'; // Red - no healthy sites
                     $healthy_icon = 'dashicons-dismiss';
 
@@ -907,7 +232,6 @@ class Watchtower_Manager_Admin_Dashboard {
                         <div class="stat-value"><?php echo $healthy_count; ?></div>
                     </div>
                     <?php
-                    // Determine unhealthy card status
                     $unhealthy_status = 'stat-unhealthy-none'; // Green - no unhealthy sites
                     $unhealthy_icon = 'dashicons-yes-alt';
 
@@ -994,7 +318,6 @@ class Watchtower_Manager_Admin_Dashboard {
                                         </td>
                                         <td data-label="Health">
                                             <?php
-                                            // Use cached health status from sorting
                                             $health_status = $agent['health_status'];
 
                                             if ($health_status === 'healthy'):
@@ -1166,181 +489,6 @@ class Watchtower_Manager_Admin_Dashboard {
             </div>
         </div>
 
-        <script>
-        var currentFilter = null;
-
-        function filterSites(filterType) {
-            var $ = jQuery;
-
-            // Toggle filter - if clicking the same filter, turn it off
-            if (currentFilter === filterType) {
-                currentFilter = null;
-                $('.filter-card').removeClass('filter-active');
-                $('.site-row').show();
-                return;
-            }
-
-            // Set new filter
-            currentFilter = filterType;
-
-            // Update active state on cards
-            $('.filter-card').removeClass('filter-active');
-            $('.filter-card[data-filter="' + filterType + '"]').addClass('filter-active');
-
-            // Show all if "all" filter
-            if (filterType === 'all') {
-                $('.site-row').show();
-                return;
-            }
-
-            // Filter rows based on health status
-            $('.site-row').each(function() {
-                var healthStatus = $(this).data('health-status');
-
-                if (filterType === 'healthy') {
-                    if (healthStatus === 'healthy') {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                } else if (filterType === 'unhealthy') {
-                    if (healthStatus === 'warning' || healthStatus === 'critical') {
-                        $(this).show();
-                    } else {
-                        $(this).hide();
-                    }
-                }
-            });
-        }
-
-        jQuery(document).ready(function($) {
-            // Clickable table rows
-            $('.clickable-row').on('click', function(e) {
-                // Don't trigger if clicking on links or buttons
-                if ($(e.target).closest('a, button').length) {
-                    return;
-                }
-
-                var detailsUrl = $(this).data('details-url');
-                if (detailsUrl) {
-                    window.location.href = detailsUrl;
-                }
-            });
-
-            // Change cursor to pointer on hover (except on links/buttons)
-            $('.clickable-row').on('mouseenter', function(e) {
-                if (!$(e.target).closest('a, button').length) {
-                    $(this).css('cursor', 'pointer');
-                }
-            });
-
-            // Scan site
-            $('.scan-site').on('click', function(e) {
-                e.preventDefault();
-                var button = $(this);
-                var siteUrl = button.data('site-url');
-                var originalText = button.text();
-
-                button.text('Scanning...').prop('disabled', true);
-
-                $.post(ajaxurl, {
-                    action: 'watchtower_manager_scan_agent',
-                    site_url: siteUrl,
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
-                }, function(response) {
-                    if (response.success) {
-                        button.text('Done!');
-                        setTimeout(function() {
-                            location.reload();
-                        }, 500);
-                    } else {
-                        alert('Scan failed: ' + response.data.message);
-                        button.text(originalText).prop('disabled', false);
-                    }
-                });
-            });
-
-            // Remove site
-            $('.remove-site').on('click', function(e) {
-                e.preventDefault();
-                var button = $(this);
-                var siteUrl = button.data('site-url');
-
-                if (!confirm('Are you sure you want to remove this site from the manager?')) {
-                    return;
-                }
-
-                button.text('Removing...').prop('disabled', true);
-
-                $.post(ajaxurl, {
-                    action: 'watchtower_manager_remove_agent',
-                    site_url: siteUrl,
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_remove'); ?>'
-                }, function(response) {
-                    if (response.success) {
-                        button.closest('tr').fadeOut(function() {
-                            $(this).remove();
-                            // Reload page if no more sites
-                            if ($('.sites-table tbody tr').length === 0) {
-                                location.reload();
-                            }
-                        });
-                    } else {
-                        alert('Failed to remove site: ' + response.data.message);
-                        button.text('Remove').prop('disabled', false);
-                    }
-                });
-            });
-
-            // Copy credentials to clipboard
-            $('.copy-credentials-btn').on('click', function(e) {
-                e.preventDefault();
-                e.stopPropagation(); // Prevent row click
-                var button = $(this);
-                var siteUrl = button.data('site-url');
-                var username = button.data('username');
-                var password = button.data('password');
-
-                var credentials = 'url: ' + siteUrl + ', user: ' + username + ', password: ' + password;
-
-                // Use modern clipboard API if available
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    navigator.clipboard.writeText(credentials).then(function() {
-                        // Show visual feedback
-                        var icon = button.find('.dashicons');
-                        var originalColor = icon.css('color');
-                        icon.css('color', '#00a32a');
-                        setTimeout(function() {
-                            icon.css('color', originalColor);
-                        }, 1000);
-                    }).catch(function(err) {
-                        console.error('Failed to copy credentials: ', err);
-                    });
-                } else {
-                    // Fallback for older browsers
-                    var textarea = document.createElement('textarea');
-                    textarea.value = credentials;
-                    textarea.style.position = 'fixed';
-                    textarea.style.opacity = '0';
-                    document.body.appendChild(textarea);
-                    textarea.select();
-                    try {
-                        document.execCommand('copy');
-                        // Show visual feedback
-                        var icon = button.find('.dashicons');
-                        var originalColor = icon.css('color');
-                        icon.css('color', '#00a32a');
-                        setTimeout(function() {
-                            icon.css('color', originalColor);
-                        }, 1000);
-                    } catch (err) {
-                        console.error('Failed to copy credentials: ', err);
-                    }
-                    document.body.removeChild(textarea);
-                }
-            });
-        });
-        </script>
         <?php
     }
 
@@ -1348,7 +496,6 @@ class Watchtower_Manager_Admin_Dashboard {
      * Render settings page
      */
     public function render_settings() {
-        // Handle form submission
         if (isset($_POST['watchtower_settings_submit'])) {
             check_admin_referer('watchtower_settings');
 
@@ -1430,7 +577,6 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Use the health storage to check and update the agent (force update for manual trigger)
         $result = $this->health_storage->check_and_update_agent_version($agent, true);
 
         if (!isset($result['checked']) || !$result['checked']) {
@@ -1453,7 +599,6 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Automatically rescan the agent to get the latest version and details
         $scan_result = $this->health_storage->fetch_and_save_health($agent);
 
         wp_send_json_success(array(
@@ -1482,7 +627,6 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Fetch and save health data (which also fetches and saves info data)
         $result = $this->health_storage->fetch_and_save_health($agent);
 
         if (!$result) {
@@ -1513,10 +657,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for logs endpoint
         $logs_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/logs');
 
-        // Call agent's /logs endpoint to get available logs
         $response = wp_remote_get($logs_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1557,10 +699,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for logs endpoint (with query parameter)
         $logs_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/logs/' . $log_type) . '&lines=' . $lines;
 
-        // Call agent's /logs/{type} endpoint
         $response = wp_remote_get(
             $logs_url,
             array(
@@ -1603,10 +743,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for debug endpoint
         $debug_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/debug');
 
-        // Call agent's /debug endpoint
         $response = wp_remote_post(
             $debug_url,
             array(
@@ -1653,21 +791,16 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Try to get cached backups data first
         $backups_data = $this->health_storage->get_backups_data($site_url);
 
-        // If no cached data or cache is stale (older than 5 minutes), fetch fresh data
         if (!$backups_data || !isset($backups_data['fetched_at'])) {
-            // Fetch from agent
             $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
         } else {
-            // Check if data is stale
             $fetched_time = strtotime($backups_data['fetched_at']);
             $current_time = current_time('timestamp');
             $age_seconds = $current_time - $fetched_time;
 
             if ($age_seconds > 300) { // 5 minutes
-                // Fetch fresh data
                 $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
             }
         }
@@ -1679,10 +812,8 @@ class Watchtower_Manager_Admin_Dashboard {
      * Fetch backups data from agent
      */
     private function fetch_backups_from_agent($site_url, $agent) {
-        // Get translated URL for backups endpoint
         $backups_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups');
 
-        // Call agent's /backups endpoint
         $response = wp_remote_get($backups_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1732,10 +863,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for backup endpoint
         $backup_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backup');
 
-        // Call agent's /backup endpoint
         $response = wp_remote_post($backup_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1781,11 +910,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for restore endpoint
         $restore_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore');
 
-        // Call agent's /restore endpoint
-        // Note: Restore runs synchronously and can take several minutes
         $response = wp_remote_post($restore_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1844,10 +970,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for restore status endpoint
         $status_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore/status');
 
-        // Call agent's /restore/status endpoint
         $response = wp_remote_get($status_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -1891,10 +1015,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Get translated URL for delete endpoint (includes backup ID in path)
         $delete_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups/' . $backup_id);
 
-        // Call agent's /backups/{id} DELETE endpoint
         $response = wp_remote_request($delete_url, array(
             'method' => 'DELETE',
             'headers' => array(
@@ -1973,10 +1095,8 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        // Build audit endpoint URL
         $translated_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/audit');
 
-        // Build query parameters
         $query_params = array();
         if ($lines !== null) {
             $query_params['lines'] = $lines;
@@ -1990,7 +1110,6 @@ class Watchtower_Manager_Admin_Dashboard {
 
         $url = add_query_arg($query_params, $translated_url);
 
-        // Make request to agent
         $response = wp_remote_get($url, array(
             'timeout' => 30,
             'headers' => array(
@@ -2025,14 +1144,12 @@ class Watchtower_Manager_Admin_Dashboard {
         $warnings = 0;
         $critical = 0;
 
-        // Check memory usage
         if (isset($health_data['memory']['usage_percentage'])) {
             $usage = floatval(str_replace('%', '', $health_data['memory']['usage_percentage']));
             if ($usage >= 90) $critical++;
             elseif ($usage >= 75) $warnings++;
         }
 
-        // Check disk usage
         if (isset($health_data['disk']['usage_percentage'])) {
             $usage = floatval(str_replace('%', '', $health_data['disk']['usage_percentage']));
             if ($usage >= 90) $critical++;
@@ -2068,11 +1185,9 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_die('Agent not found');
     }
 
-    // Fetch latest health data
     $health_data = $this->health_storage->get_health_data($site_url);
     $health_age = $this->health_storage->get_health_data_age($site_url);
 
-    // If health data is stale or missing, fetch new data
     if ($this->health_storage->is_health_data_stale($site_url)) {
         $this->health_storage->fetch_and_save_health($agent);
         $health_data = $this->health_storage->get_health_data($site_url);
@@ -2239,7 +1354,6 @@ class Watchtower_Manager_Admin_Dashboard {
                 <!-- Metrics Grid - CPU, Memory, Disk Only -->
                 <div class="metrics-grid">
                     <?php
-                    // Memory Metric
                     if (isset($health_data['memory'])):
                         $memory_usage = floatval(str_replace('%', '', $health_data['memory']['usage_percentage'] ?? '0'));
                         $memory_status = $this->get_metric_status($memory_usage, ['warning' => 75, 'critical' => 90]);
@@ -2262,7 +1376,6 @@ class Watchtower_Manager_Admin_Dashboard {
                     <?php endif; ?>
 
                     <?php
-                    // Disk Space Metric
                     if (isset($health_data['disk'])):
                         $disk_usage = floatval(str_replace('%', '', $health_data['disk']['usage_percentage'] ?? '0'));
                         $disk_status = $this->get_metric_status($disk_usage, ['warning' => 80, 'critical' => 90]);
@@ -2285,7 +1398,6 @@ class Watchtower_Manager_Admin_Dashboard {
                     <?php endif; ?>
 
                     <?php
-                    // CPU Load Metric (if available)
                     if (isset($health_data['cpu']) && !empty($health_data['cpu'])):
                         $cpu_usage = floatval(str_replace('%', '', $health_data['cpu']['usage_percentage'] ?? '0'));
                         $cpu_status = $this->get_metric_status($cpu_usage, ['warning' => 75, 'critical' => 90]);
@@ -2404,7 +1516,6 @@ class Watchtower_Manager_Admin_Dashboard {
                         </thead>
                         <tbody>
                             <?php
-                            // Sort plugins alphabetically by name
                             $sorted_plugins = $health_data['plugins']['active_plugins'];
                             usort($sorted_plugins, function($a, $b) {
                                 return strcasecmp($a['name'], $b['name']);
@@ -2595,7 +1706,6 @@ class Watchtower_Manager_Admin_Dashboard {
                             <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Scan
                         </button>
                         <?php
-                        // Check if debug mode is enabled
                         $debug_enabled = false;
                         if (isset($agent['constants']) && isset($agent['constants']['WP_DEBUG_LOG'])) {
                             $debug_enabled = $agent['constants']['WP_DEBUG_LOG'];
@@ -2616,1095 +1726,6 @@ class Watchtower_Manager_Admin_Dashboard {
         </div>
     </div>
 
-    <script>
-    function toggleHealthDetails(event) {
-        event.preventDefault();
-        var meta = document.querySelector('.health-status-meta');
-        var icon = event.currentTarget.querySelector('.dashicons');
-
-        if (meta.style.display === 'none') {
-            meta.style.display = 'block';
-            icon.classList.remove('dashicons-arrow-down-alt2');
-            icon.classList.add('dashicons-arrow-up-alt2');
-        } else {
-            meta.style.display = 'none';
-            icon.classList.remove('dashicons-arrow-up-alt2');
-            icon.classList.add('dashicons-arrow-down-alt2');
-        }
-    }
-
-    function copyTokenToClipboard() {
-        var tokenElement = document.getElementById('agent-token-value');
-        var feedback = document.getElementById('copy-feedback');
-
-        if (tokenElement) {
-            var tokenValue = tokenElement.textContent || tokenElement.innerText;
-
-            // Use modern clipboard API if available
-            if (navigator.clipboard && navigator.clipboard.writeText) {
-                navigator.clipboard.writeText(tokenValue).then(function() {
-                    showCopyFeedback(feedback);
-                }).catch(function(err) {
-                    console.error('Failed to copy token: ', err);
-                });
-            } else {
-                // Fallback for older browsers
-                var textarea = document.createElement('textarea');
-                textarea.value = tokenValue;
-                textarea.style.position = 'fixed';
-                textarea.style.opacity = '0';
-                document.body.appendChild(textarea);
-                textarea.select();
-                try {
-                    document.execCommand('copy');
-                    showCopyFeedback(feedback);
-                } catch (err) {
-                    console.error('Failed to copy token: ', err);
-                }
-                document.body.removeChild(textarea);
-            }
-        }
-    }
-
-    function showCopyFeedback(feedback) {
-        if (feedback) {
-            feedback.style.display = 'inline';
-            setTimeout(function() {
-                feedback.style.display = 'none';
-            }, 2000);
-        }
-    }
-
-    jQuery(document).ready(function($) {
-        // Check for hash in URL and switch to that tab on page load
-        if (window.location.hash) {
-            var hash = window.location.hash.substring(1); // Remove the # character
-            var validTabs = ['overview', 'plugins', 'activity', 'logs', 'actions', 'backups'];
-
-            if (validTabs.indexOf(hash) !== -1) {
-                // Update active button
-                $('.watchtower-tab-btn').removeClass('active');
-                $('.watchtower-tab-btn[data-tab="' + hash + '"]').addClass('active');
-
-                // Update mobile selector
-                $('#mobile-tab-selector').val(hash);
-
-                // Show corresponding tab content
-                $('.watchtower-tab-content').hide();
-                $('#tab-' + hash).show();
-
-                // Load content for specific tabs if needed
-                if (hash === 'logs') {
-                    setTimeout(function() {
-                        loadAvailableLogs();
-                    }, 100);
-                }
-            }
-        }
-
-        $('.watchtower-update-agent-btn').on('click', function() {
-            var button = $(this);
-            var siteUrl = button.data('site-url');
-
-            if (!confirm('Are you sure you want to update the agent plugin on this site?')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Updating...');
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_update_agent',
-                site_url: siteUrl,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_update_agent'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Update Successful!').css('color', '#00a32a');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    alert('Update failed: ' + (response.data.message || 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
-                }
-            }).fail(function() {
-                alert('Update request failed. Please try again.');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
-            });
-        });
-
-        // Toggle debug mode
-        $('.watchtower-toggle-debug-btn').on('click', function() {
-            var button = $(this);
-            var siteUrl = button.data('site-url');
-            var debugEnabled = button.data('debug-enabled') === 1;
-            var newState = !debugEnabled;
-
-            if (!confirm('Are you sure you want to ' + (newState ? 'enable' : 'disable') + ' debug mode on this site?')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_toggle_debug',
-                site_url: siteUrl,
-                enabled: newState,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_toggle_debug'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> ' + (newState ? 'Debug Enabled!' : 'Debug Disabled!')).css('color', '#00a32a');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to toggle debug mode: ' + (response.data.message || 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
-                }
-            }).fail(function() {
-                alert('Request failed. Please try again.');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
-            });
-        });
-
-        // Scan button on details page
-        $('.watchtower-scan-btn').on('click', function(e) {
-            e.preventDefault();
-            var button = $(this);
-            var siteUrl = button.data('site-url');
-            var originalHtml = button.html();
-
-            button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_scan_agent',
-                site_url: siteUrl,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Done!');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 500);
-                } else {
-                    alert('Scan failed: ' + response.data.message);
-                    button.html(originalHtml).prop('disabled', false);
-                }
-            }).fail(function() {
-                alert('Scan request failed. Please try again.');
-                button.html(originalHtml).prop('disabled', false);
-            });
-        });
-
-        // Tab switching (desktop)
-        $('.watchtower-tab-btn').on('click', function() {
-            var tab = $(this).data('tab');
-
-            // Update active button
-            $('.watchtower-tab-btn').removeClass('active');
-            $(this).addClass('active');
-
-            // Sync mobile selector
-            $('#mobile-tab-selector').val(tab);
-
-            // Show corresponding tab content
-            $('.watchtower-tab-content').hide();
-            $('#tab-' + tab).show();
-
-            // Update URL hash
-            window.location.hash = '#' + tab;
-
-            // Load logs if switching to logs tab
-            if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
-                loadAvailableLogs();
-            }
-
-            // Load backups if switching to backups tab
-            if (tab === 'backups' && !$('#backups-table').data('loaded')) {
-                loadBackups();
-            }
-
-            // Load activity logs if switching to activity tab
-            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
-                loadActivityLogs();
-            }
-        });
-
-        // Tab switching (mobile)
-        $('#mobile-tab-selector').on('change', function() {
-            var tab = $(this).val();
-
-            // Update desktop buttons (for consistency)
-            $('.watchtower-tab-btn').removeClass('active');
-            $('.watchtower-tab-btn[data-tab="' + tab + '"]').addClass('active');
-
-            // Show corresponding tab content
-            $('.watchtower-tab-content').hide();
-            $('#tab-' + tab).show();
-
-            // Update URL hash
-            window.location.hash = '#' + tab;
-
-            // Load activity logs if switching to activity tab
-            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
-                loadActivityLogs();
-            }
-
-            // Load logs if switching to logs tab
-            if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
-                loadAvailableLogs();
-            }
-
-            // Load backups if switching to backups tab
-            if (tab === 'backups' && !$('#backups-table').data('loaded')) {
-                loadBackups();
-            }
-        });
-
-        // Backups: Load backups list
-        function loadBackups() {
-            $('#backups-loading').show();
-            $('#backups-container').hide();
-            $('#backups-empty').hide();
-            $('#backups-error').hide();
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_get_backups',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
-            }, function(response) {
-                $('#backups-loading').hide();
-
-                if (response.success && response.data.success) {
-                    var backups = response.data.backups || [];
-
-                    if (backups.length > 0) {
-                        var tbody = $('#backups-table-body');
-                        tbody.empty();
-
-                        backups.forEach(function(backup) {
-                            var componentsHtml = backup.components.map(function(comp) {
-                                return '<span class="backup-component-badge">' + comp + '</span>';
-                            }).join(' ');
-
-                            var sizeText = backup.size ? formatBytes(backup.size) : '-';
-
-                            var row = $('<tr></tr>');
-                            row.append('<td><strong>' + backup.date + '</strong><br><small>ID: ' + backup.id + '</small></td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' + sizeText + '</td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' + componentsHtml + '</td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' +
-                                '<button class="button button-small restore-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
-                                '<span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Restore' +
-                                '</button> ' +
-                                '<button class="button button-small button-link-delete delete-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
-                                '<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete' +
-                                '</button>' +
-                                '</td>');
-                            tbody.append(row);
-                        });
-
-                        $('#backups-container').show();
-                        $('#backups-table').data('loaded', true);
-                    } else {
-                        $('#backups-empty').show();
-                    }
-                } else {
-                    $('#backups-error').show();
-                    $('#backups-error-message').text(response.data && response.data.error ? response.data.error : 'Failed to load backups');
-                }
-            }).fail(function() {
-                $('#backups-loading').hide();
-                $('#backups-error').show();
-                $('#backups-error-message').text('Network error while loading backups');
-            });
-        }
-
-        // Backups: Create backup
-        $('#create-backup-btn').on('click', function() {
-            var button = $(this);
-
-            if (!confirm('Create a new backup? This may take several minutes.')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Creating...');
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_create_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
-                    setTimeout(function() {
-                        button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now').css('color', '');
-                        $('#backups-table').data('loaded', false);
-                        loadBackups();
-                    }, 2000);
-                } else {
-                    alert('Failed to create backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
-                }
-            }).fail(function() {
-                alert('Network error while creating backup');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
-            });
-        });
-
-        // Backups: Refresh
-        $('#refresh-backups-btn').on('click', function() {
-            $('#backups-table').data('loaded', false);
-            loadBackups();
-        });
-
-        // Backups: Restore
-        $(document).on('click', '.restore-backup-btn', function() {
-            var button = $(this);
-            var backupId = button.data('backup-id');
-            var backupDate = button.data('backup-date');
-
-            if (!confirm('Restore backup from ' + backupDate + '?\n\nWARNING: This will overwrite your current site data. The site may be temporarily unavailable during restore.')) {
-                return;
-            }
-
-            // Show progress modal
-            $('#restore-progress-modal').css('display', 'flex');
-            $('#restore-progress-message').text('Starting restore...');
-            $('#restore-progress-bar').css('width', '0%');
-            $('#restore-progress-percent').text('0%');
-            $('#restore-progress-close').hide();
-
-            // Start restore
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_restore_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                backup_id: backupId,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    // Start polling for progress
-                    pollRestoreProgress();
-                } else {
-                    $('#restore-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
-                    $('#restore-progress-close').show();
-                }
-            }).fail(function() {
-                $('#restore-progress-message').html('<span style="color: #d63638;">Network error while starting restore</span>');
-                $('#restore-progress-close').show();
-            });
-        });
-
-        // Poll restore progress
-        var restoreProgressInterval;
-        function pollRestoreProgress() {
-            restoreProgressInterval = setInterval(function() {
-                $.post(ajaxurl, {
-                    action: 'watchtower_manager_get_restore_status',
-                    site_url: '<?php echo esc_js($site_url); ?>',
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
-                }, function(response) {
-                    if (response.success && response.data.success) {
-                        var status = response.data.status;
-                        var percent = response.data.percent_complete;
-                        var message = response.data.message;
-
-                        $('#restore-progress-bar').css('width', percent + '%');
-                        $('#restore-progress-percent').text(percent + '%');
-                        $('#restore-progress-message').text(message);
-
-                        if (status === 'complete') {
-                            clearInterval(restoreProgressInterval);
-                            $('#restore-progress-message').html('<span style="color: #00a32a;">Restore completed successfully!</span>');
-                            $('#restore-progress-close').show();
-                            setTimeout(function() {
-                                location.reload();
-                            }, 2000);
-                        } else if (status === 'error') {
-                            clearInterval(restoreProgressInterval);
-                            $('#restore-progress-message').html('<span style="color: #d63638;">Restore failed: ' + message + '</span>');
-                            $('#restore-progress-close').show();
-                        }
-                    }
-                });
-            }, 2000); // Poll every 2 seconds
-        }
-
-        // Close restore progress modal
-        $('#restore-progress-close').on('click', function() {
-            if (restoreProgressInterval) {
-                clearInterval(restoreProgressInterval);
-            }
-            $('#restore-progress-modal').hide();
-        });
-
-        // Backups: Delete
-        $(document).on('click', '.delete-backup-btn', function() {
-            var button = $(this);
-            var backupId = button.data('backup-id');
-            var backupDate = button.data('backup-date');
-
-            if (!confirm('Delete backup from ' + backupDate + '? This cannot be undone.')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Deleting...');
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_delete_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                backup_id: backupId,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
-            }, function(response) {
-                if (response.success) {
-                    button.closest('tr').fadeOut(300, function() {
-                        $(this).remove();
-                        if ($('#backups-table-body tr').length === 0) {
-                            $('#backups-container').hide();
-                            $('#backups-empty').show();
-                        }
-                    });
-                } else {
-                    alert('Failed to delete backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
-                }
-            }).fail(function() {
-                alert('Network error while deleting backup');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
-            });
-        });
-
-        // Load available log types
-        function loadAvailableLogs() {
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_get_available_logs',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_logs'); ?>'
-            }, function(response) {
-                if (response.success && response.data.logs) {
-                    var selector = $('#log-type-selector');
-                    selector.empty();
-
-                    var hasReadableLogs = false;
-                    response.data.logs.forEach(function(log) {
-                        if (log.readable) {
-                            selector.append('<option value="' + log.type + '">' +
-                                log.type.charAt(0).toUpperCase() + log.type.slice(1) +
-                                ' (' + formatBytes(log.size) + ')</option>');
-                            hasReadableLogs = true;
-                        }
-                    });
-
-                    if (!hasReadableLogs) {
-                        selector.append('<option value="">No readable logs found</option>');
-                        $('#log-viewer').html('<span style="color: #888;">No readable log files found on this site.</span>');
-                    } else {
-                        selector.data('loaded', true);
-                        loadLogs();
-                    }
-                }
-            });
-        }
-
-        // Format a single log line with syntax highlighting
-        function formatLogLine(line) {
-            // Escape HTML
-            line = $('<div>').text(line).html();
-
-            // Parse common log formats
-            // Format: [DD-MMM-YYYY HH:MM:SS UTC] message
-            var timestampMatch = line.match(/^(\[[^\]]+\])/);
-            var timestamp = '';
-            var message = line;
-
-            if (timestampMatch) {
-                timestamp = '<span style="color: #858585;">' + timestampMatch[1] + '</span> ';
-                message = line.substring(timestampMatch[1].length).trim();
-            }
-
-            // Highlight log levels and types
-            if (message.match(/PHP Fatal [Ee]rror/i)) {
-                message = '<span style="color: #ff5555; font-weight: bold;">' + message + '</span>';
-            } else if (message.match(/PHP Parse [Ee]rror/i)) {
-                message = '<span style="color: #ff5555; font-weight: bold;">' + message + '</span>';
-            } else if (message.match(/PHP Warning/i)) {
-                message = '<span style="color: #ffb86c;">' + message + '</span>';
-            } else if (message.match(/PHP Notice/i)) {
-                message = '<span style="color: #8be9fd;">' + message + '</span>';
-            } else if (message.match(/PHP Deprecated/i)) {
-                message = '<span style="color: #bd93f9;">' + message + '</span>';
-            } else if (message.match(/\b(ERROR|Error|error)\b/)) {
-                message = '<span style="color: #ff6b6b;">' + message + '</span>';
-            } else if (message.match(/\b(CRITICAL|Critical)\b/)) {
-                message = '<span style="color: #ff5555; font-weight: bold;">' + message + '</span>';
-            } else if (message.match(/\b(WARNING|Warning)\b/)) {
-                message = '<span style="color: #f1fa8c;">' + message + '</span>';
-            } else if (message.match(/\b(INFO|Info)\b/)) {
-                message = '<span style="color: #50fa7b;">' + message + '</span>';
-            } else if (message.match(/\b(DEBUG|Debug)\b/)) {
-                message = '<span style="color: #6272a4;">' + message + '</span>';
-            }
-
-            return timestamp + message;
-        }
-
-        // Load logs
-        function loadLogs() {
-            var logType = $('#log-type-selector').val();
-            var lines = $('#log-lines-count').val();
-
-            if (!logType) return;
-
-            $('#log-viewer').html('<span style="color: #888;">Loading logs...</span>');
-            $('#refresh-logs-btn').prop('disabled', true);
-
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_get_logs',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                log_type: logType,
-                lines: lines,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_logs'); ?>'
-            }, function(response) {
-                $('#refresh-logs-btn').prop('disabled', false);
-
-                if (response.success && response.data.success) {
-                    if (response.data.logs && response.data.logs.length > 0) {
-                        // Format log lines with syntax highlighting
-                        var formattedLogs = response.data.logs.map(function(line) {
-                            return formatLogLine(line);
-                        }).join('\n');
-                        $('#log-viewer').html(formattedLogs);
-                        // Scroll to bottom
-                        $('#log-viewer').scrollTop($('#log-viewer')[0].scrollHeight);
-                    } else {
-                        $('#log-viewer').html('<span style="color: #888;">No log entries found.</span>');
-                    }
-                } else {
-                    $('#log-viewer').html('<span style="color: #ff6b6b;">Error: ' +
-                        (response.data.error || 'Failed to load logs') + '</span>');
-                }
-            }).fail(function() {
-                $('#refresh-logs-btn').prop('disabled', false);
-                $('#log-viewer').html('<span style="color: #ff6b6b;">Failed to load logs. Please try again.</span>');
-            });
-        }
-
-        // Format bytes to human readable
-        function formatBytes(bytes) {
-            if (bytes === 0 || bytes === null) return '0 Bytes';
-            var k = 1024;
-            var sizes = ['Bytes', 'KB', 'MB', 'GB'];
-            var i = Math.floor(Math.log(bytes) / Math.log(k));
-            return Math.round(bytes / Math.pow(k, i) * 100) / 100 + ' ' + sizes[i];
-        }
-
-        // Event handlers for log controls
-        $('#log-type-selector').on('change', loadLogs);
-        $('#log-lines-count').on('change', loadLogs);
-        $('#refresh-logs-btn').on('click', loadLogs);
-
-        // Activity Log functionality
-        var activitySelectedDate = null;
-        var activitySiteUrl = '<?php echo esc_js($site_url); ?>';
-        var activityAllEntries = [];  // All entries for the selected date
-        var activitySelectedActions = [];  // Selected action filters
-        var activitySelectedActors = [];   // Selected actor filters
-
-        // Initialize datepicker
-        $('#activity-date-picker').datepicker({
-            dateFormat: 'yy-mm-dd',
-            maxDate: 0,
-            onSelect: function(dateText) {
-                activitySelectedDate = dateText;
-                activitySelectedActions = [];
-                activitySelectedActors = [];
-                loadActivityLogs();
-            }
-        });
-
-        // Set default date to today (in UTC to match log file timestamps)
-        var today = new Date();
-        var todayStr = today.getUTCFullYear() + '-' +
-            String(today.getUTCMonth() + 1).padStart(2, '0') + '-' +
-            String(today.getUTCDate()).padStart(2, '0');
-        $('#activity-date-picker').val(todayStr);
-        activitySelectedDate = todayStr;
-
-        function loadActivityLogs() {
-            if (!activitySelectedDate) {
-                return;
-            }
-
-            // Parse date in UTC to avoid timezone issues
-            var dateParts = activitySelectedDate.split('-');
-            var year = parseInt(dateParts[0]);
-            var month = parseInt(dateParts[1]) - 1; // JavaScript months are 0-indexed
-            var day = parseInt(dateParts[2]);
-
-            var startOfDay = Date.UTC(year, month, day, 0, 0, 0) / 1000;
-            var endOfDay = Date.UTC(year, month, day, 23, 59, 59) / 1000;
-
-            // Show loading overlay without clearing existing content
-            var hasContent = $('#activity-log-viewer').find('table').length > 0;
-            if (hasContent) {
-                // Add overlay on existing content
-                if ($('#activity-loading-overlay').length === 0) {
-                    $('#activity-log-viewer').prepend('<div id="activity-loading-overlay" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: rgba(255,255,255,0.8); z-index: 100; display: flex; align-items: center; justify-content: center;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear; color: #888;"></span></div>');
-                }
-            } else {
-                // No content yet, show centered loading message
-                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear;"></span><p>Loading activity logs...</p></div>');
-            }
-
-            // Get ALL activity logs for the day (no lines parameter)
-            $.post(ajaxurl, {
-                action: 'watchtower_manager_get_activity_logs',
-                site_url: activitySiteUrl,
-                from: startOfDay,
-                to: endOfDay,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_get_activity_logs'); ?>'
-            }, function(response) {
-                // Remove loading overlay
-                $('#activity-loading-overlay').remove();
-
-                if (response.success && response.data) {
-                    var data = response.data;
-                    if (data.success && data.entries && data.entries.length > 0) {
-                        // Store all entries
-                        activityAllEntries = data.entries;
-
-                        // Populate filter dropdowns
-                        populateActionFilter();
-                        populateActorFilter();
-
-                        // Display filtered results
-                        applyFiltersAndDisplay();
-                    } else {
-                        activityAllEntries = [];
-                        $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-info" style="font-size: 32px;"></span><p>No activity logs found for ' + activitySelectedDate + '</p></div>');
-                        $('#activity-count-visible').text('0');
-                        $('#activity-count-total').text('0');
-                    }
-                } else {
-                    activityAllEntries = [];
-                    var errorMsg = 'Failed to load activity logs';
-                    if (response.data && response.data.message) {
-                        errorMsg += ': ' + response.data.message;
-                    }
-                    $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #d63638;"><p>' + errorMsg + '</p></div>');
-                    $('#activity-count-visible').text('0');
-                    $('#activity-count-total').text('0');
-                }
-            }).fail(function() {
-                // Remove loading overlay
-                $('#activity-loading-overlay').remove();
-
-                activityAllEntries = [];
-                $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #d63638;"><p>Failed to retrieve activity logs</p></div>');
-                $('#activity-count-visible').text('0');
-                $('#activity-count-total').text('0');
-            });
-        }
-
-        function displayActivityLogs(entries) {
-            var html = '<div style="position: relative;">';
-            html += '<table style="width: 100%; border-collapse: collapse;">';
-            html += '<thead><tr style="background: #f0f0f1; position: sticky; top: 0; z-index: 10;">';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Time</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Action</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Actor</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">IP Address</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Details</th>';
-            html += '</tr></thead><tbody>';
-
-            entries.forEach(function(entry, index) {
-                var rowStyle = index % 2 === 0 ? 'background: #fff;' : 'background: #f9f9f9;';
-                html += '<tr style="' + rowStyle + '">';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.timestamp) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee;"><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.actor_name) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.ip_address) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; color: #2c3338; line-height: 1.6;">' + formatDetails(entry.details) + '</td>';
-                html += '</tr>';
-            });
-
-            html += '</tbody></table>';
-            html += '</div>';
-            $('#activity-log-viewer').html(html);
-        }
-
-        function escapeHtml(text) {
-            if (text === null || text === undefined) return '';
-            var map = {
-                '&': '&amp;',
-                '<': '&lt;',
-                '>': '&gt;',
-                '"': '&quot;',
-                "'": '&#039;'
-            };
-            return String(text).replace(/[&<>"']/g, function(m) { return map[m]; });
-        }
-
-        function formatDetails(details) {
-            if (!details || Object.keys(details).length === 0) {
-                return '<span style="color: #999;">—</span>';
-            }
-
-            var html = '';
-            var keys = Object.keys(details);
-
-            keys.forEach(function(key, index) {
-                var value = details[key];
-                var formattedValue = '';
-
-                // Format the value based on type
-                if (value === null || value === undefined) {
-                    formattedValue = '<span style="color: #999;">null</span>';
-                } else if (typeof value === 'object' && !Array.isArray(value)) {
-                    // Nested object - display inline if small, otherwise format nicely
-                    var subKeys = Object.keys(value);
-                    if (subKeys.length <= 3) {
-                        // Small object - display inline
-                        var subParts = [];
-                        subKeys.forEach(function(subKey) {
-                            subParts.push(subKey + ': ' + escapeHtml(String(value[subKey])));
-                        });
-                        formattedValue = '{' + subParts.join(', ') + '}';
-                    } else {
-                        // Larger object - display as bullet list
-                        formattedValue = '<div style="margin-left: 12px;">';
-                        subKeys.forEach(function(subKey) {
-                            formattedValue += '• ' + escapeHtml(subKey) + ': ' + escapeHtml(String(value[subKey])) + '<br>';
-                        });
-                        formattedValue += '</div>';
-                    }
-                } else if (Array.isArray(value)) {
-                    // Array - display as comma-separated list
-                    formattedValue = '[' + value.map(function(v) { return escapeHtml(String(v)); }).join(', ') + ']';
-                } else {
-                    // Simple value
-                    formattedValue = escapeHtml(String(value));
-                }
-
-                // Add to HTML
-                if (index > 0) {
-                    html += '<br>';
-                }
-                html += '<strong>' + escapeHtml(key) + ':</strong> ' + formattedValue;
-            });
-
-            return html;
-        }
-
-        function populateActionFilter() {
-            var actions = {};
-            activityAllEntries.forEach(function(entry) {
-                actions[entry.action] = (actions[entry.action] || 0) + 1;
-            });
-
-            var html = '<div style="padding: 8px;">';
-            Object.keys(actions).sort().forEach(function(action) {
-                var checked = activitySelectedActions.length === 0 || activitySelectedActions.indexOf(action) !== -1;
-                html += '<label style="display: block; padding: 4px 8px; cursor: pointer; user-select: none;">';
-                html += '<input type="checkbox" class="action-filter-checkbox" value="' + escapeHtml(action) + '" ' + (checked ? 'checked' : '') + '> ';
-                html += escapeHtml(action) + ' <span style="color: #999;">(' + actions[action] + ')</span>';
-                html += '</label>';
-            });
-            html += '</div>';
-            $('#activity-action-dropdown').html(html);
-        }
-
-        function populateActorFilter() {
-            var actors = {};
-            activityAllEntries.forEach(function(entry) {
-                actors[entry.actor_name] = (actors[entry.actor_name] || 0) + 1;
-            });
-
-            var html = '<div style="padding: 8px;">';
-            Object.keys(actors).sort().forEach(function(actor) {
-                var checked = activitySelectedActors.length === 0 || activitySelectedActors.indexOf(actor) !== -1;
-                html += '<label style="display: block; padding: 4px 8px; cursor: pointer; user-select: none;">';
-                html += '<input type="checkbox" class="actor-filter-checkbox" value="' + escapeHtml(actor) + '" ' + (checked ? 'checked' : '') + '> ';
-                html += escapeHtml(actor) + ' <span style="color: #999;">(' + actors[actor] + ')</span>';
-                html += '</label>';
-            });
-            html += '</div>';
-            $('#activity-actor-dropdown').html(html);
-        }
-
-        function applyFiltersAndDisplay() {
-            var filteredEntries = activityAllEntries.filter(function(entry) {
-                var actionMatch = activitySelectedActions.length === 0 || activitySelectedActions.indexOf(entry.action) !== -1;
-                var actorMatch = activitySelectedActors.length === 0 || activitySelectedActors.indexOf(entry.actor_name) !== -1;
-                return actionMatch && actorMatch;
-            });
-
-            displayActivityLogs(filteredEntries);
-            $('#activity-count-visible').text(filteredEntries.length);
-            $('#activity-count-total').text(activityAllEntries.length);
-
-            // Update filter button labels
-            if (activitySelectedActions.length === 0) {
-                $('#activity-action-filter').html('All Actions <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
-            } else {
-                $('#activity-action-filter').html(activitySelectedActions.length + ' selected <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
-            }
-
-            if (activitySelectedActors.length === 0) {
-                $('#activity-actor-filter').html('All Actors <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
-            } else {
-                $('#activity-actor-filter').html(activitySelectedActors.length + ' selected <span class="dashicons dashicons-arrow-down-alt2" style="float: right; margin-top: 5px;"></span>');
-            }
-        }
-
-        // Filter dropdown handlers
-        $('#activity-action-filter').on('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            $('#activity-actor-dropdown').hide();
-            $('#activity-action-dropdown').toggle();
-        });
-
-        $('#activity-actor-filter').on('click', function(e) {
-            e.preventDefault();
-            e.stopPropagation();
-            $('#activity-action-dropdown').hide();
-            $('#activity-actor-dropdown').toggle();
-        });
-
-        // Close dropdowns when clicking outside
-        $(document).on('click', function() {
-            $('#activity-action-dropdown').hide();
-            $('#activity-actor-dropdown').hide();
-        });
-
-        // Handle action filter checkbox changes
-        $(document).on('change', '.action-filter-checkbox', function(e) {
-            e.stopPropagation();
-            activitySelectedActions = [];
-            $('.action-filter-checkbox:checked').each(function() {
-                activitySelectedActions.push($(this).val());
-            });
-            applyFiltersAndDisplay();
-        });
-
-        // Handle actor filter checkbox changes
-        $(document).on('change', '.actor-filter-checkbox', function(e) {
-            e.stopPropagation();
-            activitySelectedActors = [];
-            $('.actor-filter-checkbox:checked').each(function() {
-                activitySelectedActors.push($(this).val());
-            });
-            applyFiltersAndDisplay();
-        });
-
-        // Prevent dropdown from closing when clicking inside
-        $('#activity-action-dropdown, #activity-actor-dropdown').on('click', function(e) {
-            e.stopPropagation();
-        });
-
-        $('#activity-refresh-btn').on('click', function(e) {
-            e.preventDefault();
-            loadActivityLogs();
-        });
-    });
-    </script>
-    <style>
-    @keyframes rotation {
-        from { transform: rotate(0deg); }
-        to { transform: rotate(359deg); }
-    }
-
-    /* jQuery UI Datepicker z-index fix */
-    .ui-datepicker {
-        z-index: 9999 !important;
-    }
-
-    /* Tab Navigation */
-    .watchtower-tabs {
-        display: flex;
-        gap: 0;
-        margin: 20px 0 0 0;
-        border-bottom: 1px solid #ccd0d4;
-    }
-
-    .watchtower-tab-btn {
-        background: #f6f7f7;
-        border: 1px solid #ccd0d4;
-        border-bottom: none;
-        padding: 12px 24px;
-        cursor: pointer;
-        font-size: 14px;
-        font-weight: 500;
-        color: #50575e;
-        transition: all 0.2s;
-        border-radius: 8px 8px 0 0;
-        margin-right: -1px;
-        display: flex;
-        align-items: center;
-        gap: 8px;
-    }
-
-    .watchtower-tab-btn .dashicons {
-        font-size: 18px;
-        width: 18px;
-        height: 18px;
-    }
-
-    .watchtower-tab-btn:hover {
-        background: #fff;
-        color: #2271b1;
-    }
-
-    .watchtower-tab-btn.active {
-        background: #fff;
-        color: #2271b1;
-        border-bottom: 2px solid #fff;
-        margin-bottom: -1px;
-        font-weight: 600;
-    }
-
-    .watchtower-tab-content {
-        margin-top: 20px;
-    }
-
-    #tab-overview {
-        margin-top: 20px;
-    }
-
-    #tab-plugins {
-        margin-top: 20px;
-    }
-
-    #tab-logs {
-        margin-top: 20px;
-    }
-
-    #tab-actions {
-        margin-top: 20px;
-    }
-
-    /* Log Viewer Scrollbar */
-    #log-viewer::-webkit-scrollbar {
-        width: 10px;
-    }
-
-    #log-viewer::-webkit-scrollbar-track {
-        background: #2d2d2d;
-    }
-
-    #log-viewer::-webkit-scrollbar-thumb {
-        background: #555;
-        border-radius: 5px;
-    }
-
-    #log-viewer::-webkit-scrollbar-thumb:hover {
-        background: #777;
-    }
-
-    /* Stack action buttons on narrower screens */
-    @media (max-width: 1400px) {
-        .watchtower-manager-dashboard .actions {
-            flex-direction: column;
-            gap: 6px;
-            align-items: flex-start;
-        }
-        .watchtower-manager-dashboard .actions .button-small {
-            width: 100%;
-        }
-    }
-
-    /* Mobile responsive tabs */
-    @media (max-width: 782px) {
-        /* Mobile stats grid - compact horizontal cards */
-        .watchtower-manager-dashboard .stats-grid {
-            grid-template-columns: repeat(3, 1fr);
-            gap: 6px;
-            margin-bottom: 16px;
-        }
-
-        .watchtower-manager-dashboard .stat-card {
-            padding: 6px 4px;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            text-align: center;
-            min-height: auto;
-            border-radius: 4px;
-        }
-
-        .watchtower-manager-dashboard .stat-card h3 {
-            font-size: 9px;
-            margin: 0 0 2px 0;
-            flex-direction: column;
-            gap: 1px;
-            line-height: 1.2;
-        }
-
-        .watchtower-manager-dashboard .stat-card h3 .dashicons {
-            font-size: 12px;
-            width: 12px;
-            height: 12px;
-            margin: 0;
-        }
-
-        .watchtower-manager-dashboard .stat-card .stat-value {
-            font-size: 18px;
-            font-weight: 700;
-            line-height: 1;
-        }
-
-        .watchtower-manager-dashboard .stat-card::before {
-            display: none;
-        }
-
-        /* Hide desktop tab buttons on mobile */
-        .watchtower-tabs {
-            display: none !important;
-        }
-
-        /* Show mobile tab selector */
-        .watchtower-mobile-tab-selector {
-            display: block !important;
-        }
-
-        #tab-logs > div > div:first-child {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 15px !important;
-        }
-
-        #tab-logs > div > div:first-child h2 {
-            width: 100%;
-        }
-
-        #tab-logs > div > div:first-child > div {
-            width: 100%;
-            flex-direction: row !important;
-            gap: 8px !important;
-            flex-wrap: nowrap !important;
-        }
-
-        #tab-logs > div > div:first-child > div > div {
-            flex: 1;
-            min-width: 0;
-        }
-
-        #tab-logs > div > div:first-child label {
-            display: none;
-        }
-
-        #tab-logs > div > div:first-child select {
-            width: 100%;
-        }
-
-        #tab-logs > div > div:first-child button {
-            width: auto;
-            min-width: 40px;
-            flex-shrink: 0;
-        }
-    }
-    </style>
     <?php
 }
 }

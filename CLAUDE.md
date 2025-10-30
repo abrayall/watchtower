@@ -389,6 +389,7 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
   - `Add custom admin URL support and configuration notice`
 
 ### Code Standards
+- **DO NOT add comments to code** - no inline comments, no CSS comments, no explanatory comments
 - The `build/` directory is in `.gitignore`
 - Root `version.properties` was removed - now generated during build
 - Manager plugin data directory (`manager/data/sites/`) is in `.gitignore`

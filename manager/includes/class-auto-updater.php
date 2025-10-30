@@ -36,7 +36,6 @@ class Watchtower_Manager_Auto_Updater {
         $host = $parsed['host'] ?? '';
         $port = $parsed['port'] ?? ($parsed['scheme'] === 'https' ? 443 : 80);
 
-        // Docker container translation: if localhost with non-standard port, use container name
         if ($host === 'localhost' && $port !== 80 && $port !== 443) {
             $port_to_container = array(
                 '8083' => 'watchtower_agent_site',
@@ -60,14 +59,12 @@ class Watchtower_Manager_Auto_Updater {
             return null;
         }
 
-        // Look for watchtower-agent-*.zip
         $files = glob($assets_dir . 'watchtower-agent-*.zip');
 
         if (empty($files)) {
             return null;
         }
 
-        // Return the first (and should be only) match
         return $files[0];
     }
 
@@ -86,7 +83,6 @@ class Watchtower_Manager_Auto_Updater {
             return null;
         }
 
-        // Extract version from filename: watchtower-agent-0.0.2.zip
         $filename = basename($this->agent_plugin_path);
         if (preg_match('/watchtower-agent-(.+)\.zip$/', $filename, $matches)) {
             return $matches[1];
@@ -105,7 +101,6 @@ class Watchtower_Manager_Auto_Updater {
             return false;
         }
 
-        // Compare versions - agent should match bundled version
         return $agent_version !== $bundled_version;
     }
 
@@ -124,10 +119,7 @@ class Watchtower_Manager_Auto_Updater {
         $username = $agent_data['username'];
         $password = $agent_data['password'];
 
-        // Skip deletion - WordPress will handle replacing the plugin
-        // (Deleting an active plugin via REST API is problematic)
 
-        // Install new version via WordPress API
         $install_result = $this->install_plugin_from_zip($site_url, $username, $password);
 
         return $install_result;
@@ -138,7 +130,6 @@ class Watchtower_Manager_Auto_Updater {
      */
     private function delete_plugin($site_url, $username, $password, $plugin_slug) {
         $translated_url = $this->translate_url($site_url);
-        // Use query parameter format for maximum compatibility
         $endpoint = $translated_url . '/?rest_route=/wp/v2/plugins/' . urlencode($plugin_slug);
 
         $response = wp_remote_request($endpoint, array(
@@ -150,7 +141,6 @@ class Watchtower_Manager_Auto_Updater {
             'sslverify' => false,
         ));
 
-        // It's ok if this fails - plugin might be active or not exist
         return array('success' => true);
     }
 
@@ -158,7 +148,6 @@ class Watchtower_Manager_Auto_Updater {
      * Install plugin from ZIP using custom Watchtower Agent endpoint
      */
     private function install_plugin_from_zip($site_url, $username, $password) {
-        // Read plugin file
         $file_contents = file_get_contents($this->agent_plugin_path);
         if ($file_contents === false) {
             return array(
@@ -169,13 +158,10 @@ class Watchtower_Manager_Auto_Updater {
 
         $filename = basename($this->agent_plugin_path);
         $translated_url = $this->translate_url($site_url);
-        // Use custom update endpoint (works without pretty permalinks)
         $endpoint = $translated_url . '/?rest_route=/watchtower-agent/v1/update';
 
-        // Create boundary for multipart/form-data
         $boundary = wp_generate_password(24);
 
-        // Build multipart body
         $body = '';
         $body .= '--' . $boundary . "\r\n";
         $body .= 'Content-Disposition: form-data; name="file"; filename="' . $filename . '"' . "\r\n";
@@ -207,7 +193,6 @@ class Watchtower_Manager_Auto_Updater {
         if ($response_code !== 200 && $response_code !== 201) {
             $error_message = 'Installation failed with code ' . $response_code;
 
-            // Try to get detailed error from response
             if ($result && isset($result['error'])) {
                 $error_message = $result['error'];
             } elseif ($result && isset($result['message'])) {
@@ -232,15 +217,12 @@ class Watchtower_Manager_Auto_Updater {
      * Get update status for an agent
      */
     public function get_update_status($agent_data) {
-        // Get agent version from info
         $agent_version = null;
 
         if (isset($agent_data['wordpress']['version'])) {
-            // Try to get from saved info data
             $agent_storage = new Watchtower_Manager_Agent_Storage();
             $agent_info = $agent_storage->get_agent_by_url($agent_data['site_url']);
 
-            // We need to fetch version from agent's /info endpoint
             $info_url = $agent_data['site_url'] . '/wp-json/watchtower-agent/v1/info';
             $response = wp_remote_get($info_url, array(
                 'timeout' => 10,

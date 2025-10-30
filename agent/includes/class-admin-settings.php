@@ -13,19 +13,14 @@ class Watchtower_Agent_Admin_Settings {
      * Initialize admin settings
      */
     public function init() {
-        // Add admin menu
         add_action('admin_menu', array($this, 'add_admin_menu'));
 
-        // Register settings
         add_action('admin_init', array($this, 'register_settings'));
 
-        // Handle manual registration
         add_action('admin_post_watchtower_agent_register', array($this, 'handle_manual_registration'));
 
-        // Handle quick registration from admin notice
         add_action('admin_post_watchtower_agent_quick_register', array($this, 'handle_quick_registration'));
 
-        // Show admin notice if manager URL not configured
         add_action('admin_notices', array($this, 'show_configuration_notice'));
     }
 
@@ -33,12 +28,10 @@ class Watchtower_Agent_Admin_Settings {
      * Show admin notice if manager URL is not configured
      */
     public function show_configuration_notice() {
-        // Check if user can manage options
         if (!current_user_can('manage_options')) {
             return;
         }
 
-        // Show success/error messages from registration
         if (isset($_GET['registration'])) {
             if ($_GET['registration'] === 'success') {
                 ?>
@@ -57,25 +50,21 @@ class Watchtower_Agent_Admin_Settings {
             }
         }
 
-        // Don't show on the settings page itself
         $screen = get_current_screen();
         if ($screen && $screen->id === 'settings_page_watchtower-agent') {
             return;
         }
 
-        // Check if manager is installed locally (no need for remote URL)
         $manager_active = is_plugin_active('watchtower-manager/manager.php');
         if ($manager_active) {
             return;
         }
 
-        // Check if manager URL is configured
         $manager_url = get_option('watchtower_agent_manager_url', '');
         if (!empty($manager_url)) {
             return;
         }
 
-        // Show the notice with inline configuration form
         ?>
         <div class="notice notice-warning is-dismissible" style="padding: 15px;">
             <p style="margin: 0 0 10px 0;">
@@ -135,7 +124,6 @@ class Watchtower_Agent_Admin_Settings {
         $last_registration = get_option('watchtower_agent_last_registration', '');
         $registration_status = get_option('watchtower_agent_registration_status', '');
 
-        // Check if manager is installed locally
         $manager_local = file_exists(WP_PLUGIN_DIR . '/watchtower-manager/manager.php');
         $manager_active = is_plugin_active('watchtower-manager/manager.php');
 
@@ -300,17 +288,14 @@ class Watchtower_Agent_Admin_Settings {
      * Handle manual registration
      */
     public function handle_manual_registration() {
-        // Check nonce
         if (!isset($_POST['watchtower_agent_nonce']) || !wp_verify_nonce($_POST['watchtower_agent_nonce'], 'watchtower_agent_register')) {
             wp_die('Security check failed');
         }
 
-        // Check permissions
         if (!current_user_can('manage_options')) {
             wp_die('You do not have permission to perform this action');
         }
 
-        // Get admin user and password
         $admin_users = get_users(array(
             'role' => 'administrator',
             'number' => 1,
@@ -329,14 +314,11 @@ class Watchtower_Agent_Admin_Settings {
 
         $admin_user = $admin_users[0];
 
-        // Get or create application password
         $passwords = WP_Application_Passwords::get_user_application_passwords($admin_user->ID);
         $password = null;
 
         foreach ($passwords as $pass) {
             if ($pass['name'] === 'watchtower-agent') {
-                // Password exists but we can't retrieve the actual password
-                // So we need to check transient
                 $password_data = get_transient('watchtower_agent_app_password');
                 if ($password_data && isset($password_data['password'])) {
                     $password = $password_data['password'];
@@ -346,7 +328,6 @@ class Watchtower_Agent_Admin_Settings {
         }
 
         if (!$password) {
-            // Create new password if not found
             $result = WP_Application_Passwords::create_new_application_password($admin_user->ID, array(
                 'name' => 'watchtower-agent'
             ));
@@ -362,7 +343,6 @@ class Watchtower_Agent_Admin_Settings {
 
             list($password, $password_data) = $result;
 
-            // Store in transient
             set_transient('watchtower_agent_app_password', array(
                 'username' => $admin_user->user_login,
                 'password' => $password,
@@ -370,7 +350,6 @@ class Watchtower_Agent_Admin_Settings {
             ), 600);
         }
 
-        // Attempt registration
         $result = watchtower_agent_register_with_manager($admin_user->user_login, $password);
 
         if ($result === true) {
@@ -397,20 +376,16 @@ class Watchtower_Agent_Admin_Settings {
      * Handle quick registration from admin notice
      */
     public function handle_quick_registration() {
-        // Check nonce
         if (!isset($_POST['watchtower_agent_nonce']) || !wp_verify_nonce($_POST['watchtower_agent_nonce'], 'watchtower_agent_quick_register')) {
             wp_die('Security check failed');
         }
 
-        // Check permissions
         if (!current_user_can('manage_options')) {
             wp_die('You do not have permission to perform this action');
         }
 
-        // Get manager URL (don't save yet - only save after successful registration)
         $manager_url = esc_url_raw($_POST['manager_url']);
 
-        // Get admin user and create application password
         $admin_users = get_users(array(
             'role' => 'administrator',
             'number' => 1,
@@ -428,12 +403,10 @@ class Watchtower_Agent_Admin_Settings {
 
         $admin_user = $admin_users[0];
 
-        // Check transient for existing password
         $password_data = get_transient('watchtower_agent_app_password');
         $password = $password_data ? $password_data['password'] : null;
 
         if (!$password) {
-            // Create new application password
             $result = WP_Application_Passwords::create_new_application_password($admin_user->ID, array(
                 'name' => 'watchtower-agent'
             ));
@@ -448,7 +421,6 @@ class Watchtower_Agent_Admin_Settings {
 
             list($password, $password_info) = $result;
 
-            // Store in transient
             set_transient('watchtower_agent_app_password', array(
                 'username' => $admin_user->user_login,
                 'password' => $password,
@@ -456,15 +428,12 @@ class Watchtower_Agent_Admin_Settings {
             ), 600);
         }
 
-        // Temporarily set manager URL for registration attempt
         $previous_url = get_option('watchtower_agent_manager_url', '');
         update_option('watchtower_agent_manager_url', $manager_url);
 
-        // Attempt registration
         $result = watchtower_agent_register_with_manager($admin_user->user_login, $password);
 
         if ($result === true) {
-            // Registration successful - keep the manager URL
             update_option('watchtower_agent_last_registration', current_time('mysql'));
             update_option('watchtower_agent_registration_status', 'Successfully registered');
 
@@ -472,7 +441,6 @@ class Watchtower_Agent_Admin_Settings {
                 'registration' => 'success'
             ), admin_url()));
         } else {
-            // Registration failed - restore previous URL (or remove if there wasn't one)
             if ($previous_url) {
                 update_option('watchtower_agent_manager_url', $previous_url);
             } else {

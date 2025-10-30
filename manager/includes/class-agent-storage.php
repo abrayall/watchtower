@@ -28,21 +28,16 @@ class Watchtower_Manager_Agent_Storage {
     private function get_site_dir($site_url) {
         $parsed = parse_url($site_url);
 
-        // Get hostname
         $hostname = isset($parsed['host']) ? $parsed['host'] : 'unknown';
 
-        // Get port - only add if it's non-standard
         $port = isset($parsed['port']) ? $parsed['port'] : null;
 
-        // If no explicit port, don't add default ports
         if ($port && $this->is_standard_port($parsed['scheme'] ?? 'http', $port)) {
             $port = null;
         }
 
-        // Get path (for multisite subdirectory installations)
         $path = isset($parsed['path']) ? trim($parsed['path'], '/') : '';
 
-        // Build directory name
         $dir_name = $hostname;
         if ($port) {
             $dir_name .= '-' . $port;
@@ -51,7 +46,6 @@ class Watchtower_Manager_Agent_Storage {
             $dir_name .= '-' . $path;
         }
 
-        // Sanitize directory name (remove any unsafe characters)
         $dir_name = preg_replace('/[^a-zA-Z0-9\-\.]/', '_', $dir_name);
 
         return $this->sites_dir . $dir_name . '/';
@@ -123,30 +117,24 @@ class Watchtower_Manager_Agent_Storage {
         $site_dir = $this->get_site_dir($site_url);
         $info_file = $this->get_info_file_path($site_url);
 
-        // Check if agent already exists
         $existing_agent = $this->get_agent_by_url($site_url);
         $is_new_registration = !$existing_agent;
 
         if ($existing_agent) {
-            // Update existing agent
             $agent_data = array_merge($existing_agent, $agent_data);
             $agent_data['updated_at'] = current_time('mysql');
         } else {
-            // New agent
             $agent_data['registered_at'] = current_time('mysql');
             $agent_data['updated_at'] = current_time('mysql');
         }
 
-        // Ensure site directory exists
         if (!file_exists($site_dir)) {
             wp_mkdir_p($site_dir);
         }
 
-        // Save to file
         $json = json_encode($agent_data, JSON_PRETTY_PRINT);
         $result = file_put_contents($info_file, $json);
 
-        // If this is a new registration, immediately fetch health data
         if ($result !== false && $is_new_registration) {
             require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-health-storage.php';
             $health_storage = new Watchtower_Manager_Health_Storage();
@@ -166,7 +154,6 @@ class Watchtower_Manager_Agent_Storage {
             return true; // Already removed
         }
 
-        // Remove entire site directory
         $this->delete_directory($site_dir);
 
         return !file_exists($site_dir);

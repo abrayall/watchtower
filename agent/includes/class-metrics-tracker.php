@@ -24,7 +24,6 @@ class Watchtower_Agent_Metrics_Tracker {
      * Initialize metrics tracking
      */
     public function __construct() {
-        // Track request on init hook (earliest hook after plugin is loaded)
         add_action('init', array($this, 'track_request'), 1);
     }
 
@@ -32,7 +31,6 @@ class Watchtower_Agent_Metrics_Tracker {
      * Track a request
      */
     public function track_request() {
-        // Only track if APCu is available (atomic increment, no overhead)
         if (!function_exists('apcu_inc')) {
             return;
         }
@@ -47,7 +45,6 @@ class Watchtower_Agent_Metrics_Tracker {
      * Get requests per minute
      */
     public function get_requests_per_minute() {
-        // Only available if APCu is enabled
         if (!function_exists('apcu_fetch')) {
             return null;
         }
@@ -56,7 +53,6 @@ class Watchtower_Agent_Metrics_Tracker {
         $cutoff_time = $current_time - $this->window_seconds;
         $total_requests = 0;
 
-        // Sum up all requests in the last 60 seconds
         for ($t = $cutoff_time; $t <= $current_time; $t++) {
             $key = $this->cache_key . '_' . $t;
             $count = apcu_fetch($key, $success);

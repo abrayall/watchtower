@@ -31,7 +31,6 @@ class WP_Remote_Agent_Audit_Endpoint {
      * Register routes
      */
     public function register_routes() {
-        // Get audit logs
         register_rest_route($this->namespace, '/audit', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_audit_logs'),
@@ -73,12 +72,10 @@ class WP_Remote_Agent_Audit_Endpoint {
         $to = $request->get_param('to');
         $lines = $request->get_param('lines');
 
-        // Default 'to' to current time
         if (empty($to)) {
             $to = time();
         }
 
-        // Get log entries
         $entries = $this->read_log_entries($from, $to, $lines);
 
         return new WP_REST_Response(array(
@@ -101,34 +98,26 @@ class WP_Remote_Agent_Audit_Endpoint {
             return $entries;
         }
 
-        // Get all log files, sorted by date (newest first)
         $log_files = $this->get_log_files($log_dir, $to_timestamp);
 
         foreach ($log_files as $log_file) {
             $file_entries = $this->read_file_entries($log_file, $from_timestamp, $to_timestamp);
 
-            // Add entries to result
             $entries = array_merge($entries, $file_entries);
 
-            // If we have a from_timestamp and this file is older than that, stop
             if ($from_timestamp && $this->get_file_date_timestamp($log_file) < $from_timestamp) {
                 break;
             }
         }
 
-        // Log files are written in chronological order (oldest first)
-        // If we only read from one file, just reverse. If multiple files, need to sort.
         if (count($log_files) === 1) {
-            // Single file - just reverse the array (newest first)
             $entries = array_reverse($entries);
         } else {
-            // Multiple files - need to sort by timestamp
             usort($entries, function($a, $b) {
                 return $b['unix_time'] - $a['unix_time'];
             });
         }
 
-        // Limit to max_lines AFTER sorting/reversing
         if ($max_lines && count($entries) > $max_lines) {
             $entries = array_slice($entries, 0, $max_lines);
         }
@@ -155,17 +144,14 @@ class WP_Remote_Agent_Audit_Endpoint {
             return array();
         }
 
-        // Filter files based on to_timestamp
         $filtered_files = array();
         foreach ($files as $file) {
             $file_timestamp = $this->get_file_date_timestamp($file);
-            // Include file if it's on or before the 'to' date
             if ($file_timestamp <= $to_timestamp) {
                 $filtered_files[] = $file;
             }
         }
 
-        // Sort by modification time, newest first
         usort($filtered_files, function($a, $b) {
             return filemtime($b) - filemtime($a);
         });
@@ -177,7 +163,6 @@ class WP_Remote_Agent_Audit_Endpoint {
      * Get timestamp from log file name
      */
     private function get_file_date_timestamp($file) {
-        // Extract date from filename: 2025-10-29.log
         if (preg_match('/(\d{4}-\d{2}-\d{2})\.log$/', basename($file), $matches)) {
             return strtotime($matches[1] . ' 00:00:00');
         }
@@ -210,7 +195,6 @@ class WP_Remote_Agent_Audit_Endpoint {
                 continue;
             }
 
-            // Filter by timestamp range
             if ($from_timestamp && $entry['unix_time'] < $from_timestamp) {
                 continue;
             }

@@ -28,21 +28,16 @@ class Watchtower_Manager_Health_Storage {
     private function get_site_dir($site_url) {
         $parsed = parse_url($site_url);
 
-        // Get hostname
         $hostname = isset($parsed['host']) ? $parsed['host'] : 'unknown';
 
-        // Get port - only add if it's non-standard
         $port = isset($parsed['port']) ? $parsed['port'] : null;
 
-        // If no explicit port, don't add default ports
         if ($port && $this->is_standard_port($parsed['scheme'] ?? 'http', $port)) {
             $port = null;
         }
 
-        // Get path (for multisite subdirectory installations)
         $path = isset($parsed['path']) ? trim($parsed['path'], '/') : '';
 
-        // Build directory name
         $dir_name = $hostname;
         if ($port) {
             $dir_name .= '-' . $port;
@@ -51,7 +46,6 @@ class Watchtower_Manager_Health_Storage {
             $dir_name .= '-' . $path;
         }
 
-        // Sanitize directory name (remove any unsafe characters)
         $dir_name = preg_replace('/[^a-zA-Z0-9\-\.]/', '_', $dir_name);
 
         return $this->sites_dir . $dir_name . '/';
@@ -83,11 +77,9 @@ class Watchtower_Manager_Health_Storage {
         $site_dir = $this->get_site_dir($site_url);
         $file_path = $this->get_health_file_path($site_url);
 
-        // Add timestamp
         $health_data['checked_at'] = current_time('mysql');
         $health_data['site_url'] = $site_url;
 
-        // Ensure site directory exists
         if (!file_exists($site_dir)) {
             wp_mkdir_p($site_dir);
         }
@@ -115,12 +107,10 @@ class Watchtower_Manager_Health_Storage {
             return null;
         }
 
-        // Merge in static configuration data from agent storage
         $agent_storage = new Watchtower_Manager_Agent_Storage();
         $agent = $agent_storage->get_agent_by_url($site_url);
 
         if ($agent) {
-            // Add static configuration fields from agent info
             $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
             foreach ($static_keys as $key) {
                 if (isset($agent[$key])) {
@@ -151,12 +141,9 @@ class Watchtower_Manager_Health_Storage {
     public function fetch_and_save_health($agent) {
         $site_url = $agent['site_url'];
 
-        // Build info and health endpoint URLs using query parameter format (more compatible)
         $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
         $health_url = $site_url . '/?rest_route=/watchtower-agent/v1/health';
 
-        // For local agents (same WordPress instance), use internal address
-        // Check if the host and port match any site in this WordPress installation
         $parsed_agent = parse_url($site_url);
         $parsed_current = parse_url(get_site_url());
 
@@ -165,15 +152,12 @@ class Watchtower_Manager_Health_Storage {
         $current_host = $parsed_current['host'] ?? '';
         $current_port = $parsed_current['port'] ?? ($parsed_current['scheme'] === 'https' ? 443 : 80);
 
-        // Prepare request arguments
         $request_args = array(
             'timeout' => 10,
             'sslverify' => false,
         );
 
-        // Docker container translation: if agent is localhost with non-standard port, try container name
         if ($agent_host === 'localhost' && $agent_port !== 80 && $agent_port !== 443) {
-            // Map common localhost ports to Docker container names
             $port_to_container = array(
                 '8083' => 'watchtower_agent_site',
             );
@@ -183,13 +167,11 @@ class Watchtower_Manager_Health_Storage {
                 $health_url = 'http://' . $port_to_container[$agent_port] . '/?rest_route=/watchtower-agent/v1/health';
             }
         }
-        // If same host and port, it's local - use internal address
         elseif ($agent_host === $current_host && $agent_port === $current_port) {
             $path = $parsed_agent['path'] ?? '';
             $info_url = 'http://127.0.0.1' . $path . '/?rest_route=/watchtower-agent/v1/info';
             $health_url = 'http://127.0.0.1' . $path . '/?rest_route=/watchtower-agent/v1/health';
 
-            // Add Host header to prevent redirect
             $host_header = $agent_host;
             if ($agent_port !== 80 && $agent_port !== 443) {
                 $host_header .= ':' . $agent_port;
@@ -199,7 +181,6 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // First, fetch /info to get agent version
         $info_response = wp_remote_get($info_url, $request_args);
         $agent_version = null;
 
@@ -211,11 +192,9 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Then fetch /health
         $response = wp_remote_get($health_url, $request_args);
 
         if (is_wp_error($response)) {
-            // Save error state
             $health_data = array(
                 'success' => false,
                 'error' => $response->get_error_message(),
@@ -234,11 +213,9 @@ class Watchtower_Manager_Health_Storage {
             return $this->save_health_data($site_url, $health_data);
         }
 
-        // Split data into static (info) and dynamic (health) components
         $agent_storage = new Watchtower_Manager_Agent_Storage();
         $current_agent = $agent_storage->get_agent_by_url($site_url);
 
-        // Extract static configuration data for info.json
         $static_data = array();
         $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
 
@@ -248,11 +225,9 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Update agent info with static configuration data
         if (!empty($static_data) || $agent_version) {
             $update_data = array_merge(array('site_url' => $site_url), $static_data);
 
-            // Also save flattened fields to top level for easy access
             if (isset($static_data['wordpress']['site_name'])) {
                 $update_data['site_name'] = $static_data['wordpress']['site_name'];
             }
@@ -275,7 +250,6 @@ class Watchtower_Manager_Health_Storage {
             $agent_storage->save_agent($update_data);
         }
 
-        // Extract dynamic monitoring data for health.json
         $dynamic_data = array(
             'success' => true,
             'timestamp' => $health_data['timestamp'] ?? current_time('mysql'),
@@ -289,16 +263,12 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Check and update agent version if needed (forced during manual scans)
         if ($agent_version) {
             $update_result = $this->check_and_update_agent_version($agent, true);
 
-            // If agent was updated, re-fetch health data to get new version
             if (!empty($update_result['auto_updated'])) {
-                // Sleep briefly to allow the agent to fully restart
                 sleep(2);
 
-                // Re-fetch agent info to update version
                 $info_response = wp_remote_get($info_url, $request_args);
                 if (!is_wp_error($info_response)) {
                     $info_body = wp_remote_retrieve_body($info_response);
@@ -313,7 +283,6 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Fetch and save backups data
         $this->fetch_and_save_backups($site_url, $agent, $request_args);
 
         return $this->save_health_data($site_url, $dynamic_data);
@@ -323,21 +292,17 @@ class Watchtower_Manager_Health_Storage {
      * Fetch and save backups data from agent
      */
     private function fetch_and_save_backups($site_url, $agent, $request_args) {
-        // Get translated URL for backups endpoint
         $backups_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups');
 
-        // Add authentication headers
         $backups_request_args = array_merge($request_args, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
             ),
         ));
 
-        // Fetch backups data
         $backups_response = wp_remote_get($backups_url, $backups_request_args);
 
         if (is_wp_error($backups_response)) {
-            // Save error state
             $backups_data = array(
                 'success' => false,
                 'error' => $backups_response->get_error_message(),
@@ -358,7 +323,6 @@ class Watchtower_Manager_Health_Storage {
             }
         }
 
-        // Save backups data to backups.json
         $this->save_backups_data($site_url, $backups_data);
     }
 
@@ -369,7 +333,6 @@ class Watchtower_Manager_Health_Storage {
         $site_dir = $this->get_site_dir($site_url);
         $file_path = $site_dir . 'backups.json';
 
-        // Ensure site directory exists
         if (!file_exists($site_dir)) {
             wp_mkdir_p($site_dir);
         }
@@ -417,11 +380,9 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // Get agent version from /info endpoint
         $site_url = $agent_data['site_url'];
         $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
 
-        // Apply Docker localhost translation if needed
         $parsed_agent = parse_url($site_url);
         $agent_host = $parsed_agent['host'] ?? '';
         $agent_port = $parsed_agent['port'] ?? ($parsed_agent['scheme'] === 'https' ? 443 : 80);
@@ -470,7 +431,6 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // Auto-update is needed - check if auto-update is enabled (unless forced)
         $auto_update_enabled = get_option('watchtower_auto_update_agents', false);
 
         if (!$auto_update_enabled && !$force_update) {
@@ -484,7 +444,6 @@ class Watchtower_Manager_Health_Storage {
             );
         }
 
-        // Perform update (auto or manual)
         $update_result = $auto_updater->update_agent($agent_data);
 
         return array_merge(array(

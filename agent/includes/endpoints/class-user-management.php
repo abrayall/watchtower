@@ -25,7 +25,6 @@ class Watchtower_Agent_User_Management {
      * Register routes
      */
     public function register_routes() {
-        // List users
         register_rest_route($this->namespace, '/users', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'list_users'),
@@ -42,7 +41,6 @@ class Watchtower_Agent_User_Management {
             ),
         ));
 
-        // Create user
         register_rest_route($this->namespace, '/users', array(
             'methods' => WP_REST_Server::CREATABLE,
             'callback' => array($this, 'create_user'),
@@ -80,7 +78,6 @@ class Watchtower_Agent_User_Management {
             ),
         ));
 
-        // Get user
         register_rest_route($this->namespace, '/users/(?P<id>\d+)', array(
             'methods' => WP_REST_Server::READABLE,
             'callback' => array($this, 'get_user'),
@@ -93,7 +90,6 @@ class Watchtower_Agent_User_Management {
             ),
         ));
 
-        // Update user
         register_rest_route($this->namespace, '/users/(?P<id>\d+)', array(
             'methods' => WP_REST_Server::EDITABLE,
             'callback' => array($this, 'update_user'),
@@ -129,7 +125,6 @@ class Watchtower_Agent_User_Management {
             ),
         ));
 
-        // Delete user
         register_rest_route($this->namespace, '/users/(?P<id>\d+)', array(
             'methods' => WP_REST_Server::DELETABLE,
             'callback' => array($this, 'delete_user'),
@@ -195,7 +190,6 @@ class Watchtower_Agent_User_Management {
         $password = $request->get_param('password');
         $role = $request->get_param('role');
 
-        // Check if username exists
         if (username_exists($username)) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -203,7 +197,6 @@ class Watchtower_Agent_User_Management {
             ), 400);
         }
 
-        // Check if email exists
         if (email_exists($email)) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -211,7 +204,6 @@ class Watchtower_Agent_User_Management {
             ), 400);
         }
 
-        // Create user
         $user_id = wp_create_user($username, $password, $email);
 
         if (is_wp_error($user_id)) {
@@ -221,11 +213,9 @@ class Watchtower_Agent_User_Management {
             ), 400);
         }
 
-        // Set role
         $user = new WP_User($user_id);
         $user->set_role($role);
 
-        // Set additional fields
         if ($request->get_param('first_name')) {
             update_user_meta($user_id, 'first_name', $request->get_param('first_name'));
         }
@@ -289,7 +279,6 @@ class Watchtower_Agent_User_Management {
         $user_data = array('ID' => $user_id);
 
         if ($request->get_param('email')) {
-            // Check if email is already used by another user
             $email_exists = email_exists($request->get_param('email'));
             if ($email_exists && $email_exists != $user_id) {
                 return new WP_REST_Response(array(
@@ -313,13 +302,11 @@ class Watchtower_Agent_User_Management {
             ), 400);
         }
 
-        // Update role
         if ($request->get_param('role')) {
             $user = new WP_User($user_id);
             $user->set_role($request->get_param('role'));
         }
 
-        // Update meta fields
         if ($request->get_param('first_name')) {
             update_user_meta($user_id, 'first_name', $request->get_param('first_name'));
         }
@@ -349,7 +336,6 @@ class Watchtower_Agent_User_Management {
             ), 404);
         }
 
-        // Prevent deleting current user
         if ($user_id === get_current_user_id()) {
             return new WP_REST_Response(array(
                 'success' => false,
