@@ -76,7 +76,7 @@ function watchtower_manager_translate_agent_url($site_url, $endpoint) {
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-watchtower-manager.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-rest-api-controller.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-agent-storage.php';
-require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-health-storage.php';
+require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-site-storage.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-auto-updater.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-admin-dashboard.php';
 
@@ -109,7 +109,7 @@ function watchtower_manager_add_cron_schedules($schedules) {
 add_action('watchtower_manager_poll_health', 'watchtower_manager_poll_health_callback');
 function watchtower_manager_poll_health_callback() {
     $agent_storage = new Watchtower_Manager_Agent_Storage();
-    $health_storage = new Watchtower_Manager_Health_Storage();
+    $site_storage = new Watchtower_Manager_Site_Storage();
 
     $agents = $agent_storage->get_all_agents();
 
@@ -118,7 +118,7 @@ function watchtower_manager_poll_health_callback() {
     foreach ($agents as $agent) {
         $site_url = $agent['site_url'];
 
-        $result = $health_storage->fetch_and_save_health($agent);
+        $result = $site_storage->fetch_and_save_health($agent);
 
         if ($result) {
             error_log('Watchtower Manager: Health data updated for ' . $site_url);
@@ -133,7 +133,7 @@ function watchtower_manager_poll_health_callback() {
 add_action('watchtower_manager_check_versions', 'watchtower_manager_check_versions_callback');
 function watchtower_manager_check_versions_callback() {
     $agent_storage = new Watchtower_Manager_Agent_Storage();
-    $health_storage = new Watchtower_Manager_Health_Storage();
+    $site_storage = new Watchtower_Manager_Site_Storage();
 
     $agents = $agent_storage->get_all_agents();
 
@@ -142,7 +142,7 @@ function watchtower_manager_check_versions_callback() {
     foreach ($agents as $agent) {
         $site_url = $agent['site_url'];
 
-        $result = $health_storage->check_and_update_agent_version($agent);
+        $result = $site_storage->check_and_update_agent_version($agent);
 
         if (isset($result['checked']) && $result['checked']) {
             if (isset($result['needs_update']) && $result['needs_update']) {

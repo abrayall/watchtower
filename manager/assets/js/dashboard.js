@@ -65,10 +65,10 @@
 
                 button.text('Scanning...').prop('disabled', true);
 
-                $.post(ajaxurl, {
+                $.post(context.ajaxurl, {
                     action: 'watchtower_manager_scan_agent',
                     site_url: siteUrl,
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
+                    nonce: context.nonce
                 }, function(response) {
                     if (response.success) {
                         button.text('Done!');
@@ -93,10 +93,10 @@
 
                 button.text('Removing...').prop('disabled', true);
 
-                $.post(ajaxurl, {
+                $.post(context.ajaxurl, {
                     action: 'watchtower_manager_remove_agent',
                     site_url: siteUrl,
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_remove'); ?>'
+                    nonce: context.nonce
                 }, function(response) {
                     if (response.success) {
                         button.closest('tr').fadeOut(function() {

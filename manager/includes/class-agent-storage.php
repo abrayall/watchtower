@@ -136,9 +136,9 @@ class Watchtower_Manager_Agent_Storage {
         $result = file_put_contents($info_file, $json);
 
         if ($result !== false && $is_new_registration) {
-            require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-health-storage.php';
-            $health_storage = new Watchtower_Manager_Health_Storage();
-            $health_storage->fetch_and_save_health($agent_data);
+            require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-site-storage.php';
+            $site_storage = new Watchtower_Manager_Site_Storage();
+            $site_storage->fetch_and_save_health($agent_data);
         }
 
         return $result !== false;

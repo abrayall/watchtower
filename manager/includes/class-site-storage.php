@@ -1,6 +1,6 @@
 <?php
 /**
- * Health Storage Class
+ * Site Storage Class
  * Handles reading and writing site health data to individual site directories
  */
 
@@ -8,7 +8,7 @@ if (!defined('ABSPATH')) {
     exit;
 }
 
-class Watchtower_Manager_Health_Storage {
+class Watchtower_Manager_Site_Storage {
 
     /**
      * Path to sites directory

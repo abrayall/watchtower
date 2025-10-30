@@ -55,27 +55,6 @@
     }
 
     jQuery(document).ready(function($) {
-        if (window.location.hash) {
-            var hash = window.location.hash.substring(1); // Remove the # character
-            var validTabs = ['overview', 'plugins', 'activity', 'logs', 'actions', 'backups'];
-
-            if (validTabs.indexOf(hash) !== -1) {
-                $('.watchtower-tab-btn').removeClass('active');
-                $('.watchtower-tab-btn[data-tab="' + hash + '"]').addClass('active');
-
-                $('#mobile-tab-selector').val(hash);
-
-                $('.watchtower-tab-content').hide();
-                $('#tab-' + hash).show();
-
-                if (hash === 'logs') {
-                    setTimeout(function() {
-                        loadAvailableLogs();
-                    }, 100);
-                }
-            }
-        }
-
         $('.watchtower-update-agent-btn').on('click', function() {
             var button = $(this);
             var siteUrl = button.data('site-url');
@@ -86,10 +65,10 @@
 
             button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Updating...');
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_update_agent',
                 site_url: siteUrl,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_update_agent'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Update Successful!').css('color', '#00a32a');
@@ -118,11 +97,11 @@
 
             button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_toggle_debug',
                 site_url: siteUrl,
                 enabled: newState,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_toggle_debug'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> ' + (newState ? 'Debug Enabled!' : 'Debug Disabled!')).css('color', '#00a32a');
@@ -147,10 +126,10 @@
 
             button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_scan_agent',
                 site_url: siteUrl,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_scan'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Done!');
@@ -180,15 +159,22 @@
 
             window.location.hash = '#' + tab;
 
-            if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
-                loadAvailableLogs();
+            if (tab === 'logs') {
+                if (!$('#log-type-selector').data('loaded')) {
+                    loadAvailableLogs();
+                    setTimeout(function() {
+                        loadLogs();
+                    }, 200);
+                } else {
+                    loadLogs();
+                }
             }
 
             if (tab === 'backups' && !$('#backups-table').data('loaded')) {
                 loadBackups();
             }
 
-            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
+            if (tab === 'activity') {
                 loadActivityLogs();
             }
         });
@@ -204,12 +190,19 @@
 
             window.location.hash = '#' + tab;
 
-            if (tab === 'activity' && activitySelectedDate && $('#activity-log-viewer').find('table').length === 0) {
+            if (tab === 'activity') {
                 loadActivityLogs();
             }
 
-            if (tab === 'logs' && !$('#log-type-selector').data('loaded')) {
-                loadAvailableLogs();
+            if (tab === 'logs') {
+                if (!$('#log-type-selector').data('loaded')) {
+                    loadAvailableLogs();
+                    setTimeout(function() {
+                        loadLogs();
+                    }, 200);
+                } else {
+                    loadLogs();
+                }
             }
 
             if (tab === 'backups' && !$('#backups-table').data('loaded')) {
@@ -223,10 +216,10 @@
             $('#backups-empty').hide();
             $('#backups-error').hide();
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_backups',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                site_url: context.siteUrl,
+                nonce: context.nonce
             }, function(response) {
                 $('#backups-loading').hide();
 
@@ -284,10 +277,10 @@
 
             button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Creating...');
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_create_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                site_url: context.siteUrl,
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
@@ -326,11 +319,11 @@
             $('#restore-progress-percent').text('0%');
             $('#restore-progress-close').hide();
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_restore_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
+                site_url: context.siteUrl,
                 backup_id: backupId,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     pollRestoreProgress();
@@ -347,10 +340,10 @@
         var restoreProgressInterval;
         function pollRestoreProgress() {
             restoreProgressInterval = setInterval(function() {
-                $.post(ajaxurl, {
+                $.post(context.ajaxurl, {
                     action: 'watchtower_manager_get_restore_status',
-                    site_url: '<?php echo esc_js($site_url); ?>',
-                    nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                    site_url: context.siteUrl,
+                    nonce: context.nonce
                 }, function(response) {
                     if (response.success && response.data.success) {
                         var status = response.data.status;
@@ -396,11 +389,11 @@
 
             button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; animation: rotation 2s infinite linear;"></span> Deleting...');
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_delete_backup',
-                site_url: '<?php echo esc_js($site_url); ?>',
+                site_url: context.siteUrl,
                 backup_id: backupId,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_backups'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 if (response.success) {
                     button.closest('tr').fadeOut(300, function() {
@@ -421,10 +414,10 @@
         });
 
         function loadAvailableLogs() {
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_available_logs',
-                site_url: '<?php echo esc_js($site_url); ?>',
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_logs'); ?>'
+                site_url: context.siteUrl,
+                nonce: context.nonce
             }, function(response) {
                 if (response.success && response.data.logs) {
                     var selector = $('#log-type-selector');
@@ -497,12 +490,12 @@
             $('#log-viewer').html('<span style="color: #888;">Loading logs...</span>');
             $('#refresh-logs-btn').prop('disabled', true);
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_logs',
-                site_url: '<?php echo esc_js($site_url); ?>',
+                site_url: context.siteUrl,
                 log_type: logType,
                 lines: lines,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_logs'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 $('#refresh-logs-btn').prop('disabled', false);
 
@@ -539,7 +532,7 @@
         $('#refresh-logs-btn').on('click', loadLogs);
 
         var activitySelectedDate = null;
-        var activitySiteUrl = '<?php echo esc_js($site_url); ?>';
+        var activitySiteUrl = context.siteUrl;
         var activityAllEntries = [];  // All entries for the selected date
         var activitySelectedActions = [];  // Selected action filters
         var activitySelectedActors = [];   // Selected actor filters
@@ -584,12 +577,12 @@
                 $('#activity-log-viewer').html('<div style="text-align: center; padding: 50px 0; color: #888;"><span class="dashicons dashicons-update" style="font-size: 32px; animation: rotation 2s infinite linear;"></span><p>Loading activity logs...</p></div>');
             }
 
-            $.post(ajaxurl, {
+            $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_activity_logs',
                 site_url: activitySiteUrl,
                 from: startOfDay,
                 to: endOfDay,
-                nonce: '<?php echo wp_create_nonce('watchtower_manager_get_activity_logs'); ?>'
+                nonce: context.nonce
             }, function(response) {
                 $('#activity-loading-overlay').remove();
 
@@ -816,4 +809,34 @@
             e.preventDefault();
             loadActivityLogs();
         });
+
+        if (window.location.hash) {
+            var hash = window.location.hash.substring(1);
+            var validTabs = ['overview', 'plugins', 'activity', 'logs', 'actions', 'backups'];
+
+            if (validTabs.indexOf(hash) !== -1) {
+                $('.watchtower-tab-btn').removeClass('active');
+                $('.watchtower-tab-btn[data-tab="' + hash + '"]').addClass('active');
+
+                $('#mobile-tab-selector').val(hash);
+
+                $('.watchtower-tab-content').hide();
+                $('#tab-' + hash).show();
+
+                if (hash === 'logs') {
+                    setTimeout(function() {
+                        loadAvailableLogs();
+                        setTimeout(function() {
+                            loadLogs();
+                        }, 200);
+                    }, 100);
+                }
+
+                if (hash === 'activity') {
+                    setTimeout(function() {
+                        loadActivityLogs();
+                    }, 100);
+                }
+            }
+        }
     });
