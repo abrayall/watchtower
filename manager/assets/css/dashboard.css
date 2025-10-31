@@ -36,7 +36,7 @@
         .watchtower-manager-dashboard .actions {
             flex-direction: column;
             gap: 6px;
-            align-items: flex-start;
+            align-items: flex-end;
         }
         .watchtower-manager-dashboard .actions .button-small {
             width: 100%;
@@ -389,6 +389,7 @@
     display: flex;
     gap: 8px;
     flex-wrap: wrap;
+    justify-content: flex-end;
 }
 .watchtower-manager-dashboard .button-small {
     padding: 4px 8px;

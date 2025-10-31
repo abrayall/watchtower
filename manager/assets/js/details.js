@@ -177,6 +177,10 @@
             if (tab === 'activity') {
                 loadActivityLogs();
             }
+
+            if (tab === 'users') {
+                loadUsers();
+            }
         });
 
         $('#mobile-tab-selector').on('change', function() {
@@ -207,6 +211,10 @@
 
             if (tab === 'backups' && !$('#backups-table').data('loaded')) {
                 loadBackups();
+            }
+
+            if (tab === 'users') {
+                loadUsers();
             }
         });
 
@@ -241,7 +249,7 @@
                             row.append('<td><strong>' + backup.date + '</strong><br><small>ID: ' + backup.id + '</small></td>');
                             row.append('<td style="text-align: center; vertical-align: middle;">' + sizeText + '</td>');
                             row.append('<td style="text-align: center; vertical-align: middle;">' + componentsHtml + '</td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' +
+                            row.append('<td style="text-align: right; vertical-align: middle;">' +
                                 '<button class="button button-small restore-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
                                 '<span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Restore' +
                                 '</button> ' +
@@ -810,9 +818,370 @@
             loadActivityLogs();
         });
 
+        function loadUsers() {
+            $('#users-loading').show();
+            $('#users-container').hide();
+            $('#users-empty').hide();
+            $('#users-error').hide();
+
+            $.ajax({
+                url: context.ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'watchtower_manager_get_users',
+                    site_url: context.siteUrl,
+                    nonce: context.nonce
+                },
+                timeout: 30000,
+                success: function(response) {
+                    $('#users-loading').hide();
+
+                    if (response.success && response.data.users && response.data.users.length > 0) {
+                        displayUsers(response.data.users);
+                        $('#users-container').show();
+                    } else if (response.success && response.data.users && response.data.users.length === 0) {
+                        $('#users-empty').show();
+                    } else {
+                        $('#users-error-message').text(response.data && response.data.message ? response.data.message : 'Failed to load users');
+                        $('#users-error').show();
+                    }
+                },
+                error: function(jqXHR, textStatus, errorThrown) {
+                    $('#users-loading').hide();
+                    $('#users-error-message').text('Network error: ' + textStatus);
+                    $('#users-error').show();
+                }
+            });
+        }
+
+        function displayUsers(users) {
+            var tbody = $('#users-table-body');
+            tbody.empty();
+
+            users.forEach(function(user) {
+                var currentRole = user.roles.indexOf('administrator') >= 0 ? 'Administrator' :
+                                  user.roles.indexOf('editor') >= 0 ? 'Editor' :
+                                  user.roles.indexOf('author') >= 0 ? 'Author' :
+                                  user.roles.indexOf('contributor') >= 0 ? 'Contributor' : 'Subscriber';
+
+                var row = $('<tr data-user-id="' + user.id + '" data-email="' + escapeHtml(user.email) + '" data-first-name="' + escapeHtml(user.first_name || '') + '" data-last-name="' + escapeHtml(user.last_name || '') + '" data-role="' + user.roles[0] + '" data-username="' + escapeHtml(user.username) + '">' +
+                    '<td data-label="Username"><strong>' + escapeHtml(user.username) + '</strong></td>' +
+                    '<td data-label="Email" class="user-email-cell">' + escapeHtml(user.email) + '</td>' +
+                    '<td data-label="First Name" class="user-first-name-cell">' + escapeHtml(user.first_name || '') + '</td>' +
+                    '<td data-label="Last Name" class="user-last-name-cell">' + escapeHtml(user.last_name || '') + '</td>' +
+                    '<td data-label="Role" class="user-role-cell">' + currentRole + '</td>' +
+                    '<td class="user-actions-cell">' +
+                    '<div class="button-group">' +
+                    '<button class="button button-primary edit-user-quick-btn" data-user-id="' + user.id + '">Edit</button>' +
+                    '<button class="button button-primary edit-user-dropdown-btn" data-user-id="' + user.id + '"><span class="dashicons dashicons-arrow-down-alt2"></span></button>' +
+                    '<div class="edit-dropdown-menu" data-user-id="' + user.id + '">' +
+                    '<a href="#" class="edit-dropdown-item quick-edit-item" data-user-id="' + user.id + '">Quick Edit</a>' +
+                    '<a href="#" class="edit-dropdown-item full-edit-item" data-user-id="' + user.id + '">Full Edit</a>' +
+                    '<a href="#" class="edit-dropdown-item reset-password-item" data-user-id="' + user.id + '" data-user-email="' + escapeHtml(user.email) + '">Reset Password</a>' +
+                    '</div>' +
+                    '</div>' +
+                    '<button class="button delete-user-btn" data-user-id="' + user.id + '" data-username="' + escapeHtml(user.username) + '">Delete</button>' +
+                    '</td>' +
+                    '</tr>');
+                tbody.append(row);
+            });
+
+            $('.edit-dropdown-item').on('mouseenter', function() {
+                $(this).css('background', '#f6f7f7');
+            }).on('mouseleave', function() {
+                $(this).css('background', '#fff');
+            });
+        }
+
+        $('#create-user-btn').on('click', function() {
+            $('#user-modal-title').text('Create New User');
+            $('#new-username').val('').prop('disabled', false);
+            $('#new-email').val('');
+            $('#new-password').val('');
+            $('#new-password-label').text('Password *');
+            $('#new-first-name').val('');
+            $('#new-last-name').val('');
+            $('#new-role').val('administrator');
+            $('#confirm-create-user-btn').text('Create User').data('mode', 'create').removeData('user-id');
+            $('#create-user-modal').css('display', 'flex');
+        });
+
+        $('#cancel-create-user-btn').on('click', function() {
+            $('#create-user-modal').hide();
+        });
+
+        $('#confirm-create-user-btn').on('click', function() {
+            var mode = $(this).data('mode') || 'create';
+            var userId = $(this).data('user-id');
+            var username = $('#new-username').val().trim();
+            var email = $('#new-email').val().trim();
+            var password = $('#new-password').val();
+            var firstName = $('#new-first-name').val().trim();
+            var lastName = $('#new-last-name').val().trim();
+            var role = $('#new-role').val();
+
+            if (mode === 'create') {
+                if (!username || !email || !password) {
+                    alert('Please fill in all required fields (Username, Email, Password)');
+                    return;
+                }
+
+                $(this).prop('disabled', true).text('Creating...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_create_user',
+                    site_url: context.siteUrl,
+                    nonce: context.nonce,
+                    username: username,
+                    email: email,
+                    password: password,
+                    first_name: firstName,
+                    last_name: lastName,
+                    role: role
+                }, function(response) {
+                    if (response.success) {
+                        $('#create-user-modal').hide();
+                        loadUsers();
+                    } else {
+                        alert('Failed to create user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    }
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Create User');
+                }).fail(function() {
+                    alert('Network error occurred');
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Create User');
+                });
+            } else {
+                if (!email) {
+                    alert('Email cannot be empty');
+                    return;
+                }
+
+                $(this).prop('disabled', true).text('Updating...');
+
+                var updateData = {
+                    action: 'watchtower_manager_update_user',
+                    site_url: context.siteUrl,
+                    nonce: context.nonce,
+                    user_id: userId,
+                    email: email,
+                    first_name: firstName,
+                    last_name: lastName,
+                    role: role
+                };
+
+                if (password) {
+                    updateData.password = password;
+                }
+
+                $.post(context.ajaxurl, updateData, function(response) {
+                    if (response.success) {
+                        $('#create-user-modal').hide();
+                        alert('User updated successfully');
+                        loadUsers();
+                    } else {
+                        alert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    }
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Update User');
+                }).fail(function() {
+                    alert('Network error occurred');
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Update User');
+                });
+            }
+        });
+
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.edit-user-dropdown-btn, .edit-dropdown-menu').length) {
+                $('.edit-dropdown-menu').hide();
+            }
+        });
+
+        $(document).on('click', '.edit-user-dropdown-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var userId = $(this).data('user-id');
+            // Hide all dropdown menus first
+            $('#users-table-body .edit-dropdown-menu').hide();
+            // Show only this specific user's menu
+            $(this).siblings('.edit-dropdown-menu[data-user-id="' + userId + '"]').show();
+        });
+
+        $(document).on('click', '.edit-user-quick-btn, .quick-edit-item', function(e) {
+            e.preventDefault();
+            $('.edit-dropdown-menu').hide();
+
+            var userId = $(this).data('user-id');
+            var row = $('#users-table-body tr[data-user-id="' + userId + '"]').first();
+
+            if (row.length === 0) {
+                return;
+            }
+
+            if (row.hasClass('editing')) {
+                return;
+            }
+
+            // Cancel any other rows in edit mode first
+            if ($('#users-table-body tr.editing').length > 0) {
+                loadUsers();
+                return;
+            }
+
+            var email = row.attr('data-email');
+            var firstName = row.attr('data-first-name');
+            var lastName = row.attr('data-last-name');
+            var role = row.attr('data-role');
+
+            var roleOptions = '<select class="user-role-edit" style="width: 100%; padding: 4px;">';
+            roleOptions += '<option value="administrator"' + (role === 'administrator' ? ' selected' : '') + '>Administrator</option>';
+            roleOptions += '<option value="editor"' + (role === 'editor' ? ' selected' : '') + '>Editor</option>';
+            roleOptions += '<option value="author"' + (role === 'author' ? ' selected' : '') + '>Author</option>';
+            roleOptions += '<option value="contributor"' + (role === 'contributor' ? ' selected' : '') + '>Contributor</option>';
+            roleOptions += '<option value="subscriber"' + (role === 'subscriber' ? ' selected' : '') + '>Subscriber</option>';
+            roleOptions += '</select>';
+
+            row.addClass('editing');
+            row.find('.user-email-cell').html('<input type="email" class="user-email-edit" value="' + escapeHtml(email) + '" style="width: 100%; padding: 4px;">');
+            row.find('.user-first-name-cell').html('<input type="text" class="user-first-name-edit" value="' + escapeHtml(firstName) + '" style="width: 100%; padding: 4px;">');
+            row.find('.user-last-name-cell').html('<input type="text" class="user-last-name-edit" value="' + escapeHtml(lastName) + '" style="width: 100%; padding: 4px;">');
+            row.find('.user-role-cell').html(roleOptions);
+            row.find('.user-actions-cell').html(
+                '<button class="button button-primary save-user-btn" data-user-id="' + userId + '">Save</button> ' +
+                '<button class="button cancel-edit-user-btn" data-user-id="' + userId + '">Cancel</button>'
+            );
+        });
+
+        $(document).on('click', '.full-edit-item', function(e) {
+            e.preventDefault();
+            var userId = $(this).data('user-id');
+            var row = $('tr[data-user-id="' + userId + '"]');
+
+            var email = row.data('email');
+            var firstName = row.data('first-name');
+            var lastName = row.data('last-name');
+            var role = row.data('role');
+            var username = row.data('username');
+
+            $('#user-modal-title').text('Edit User');
+            $('#new-username').val(username).prop('disabled', true);
+            $('#new-email').val(email);
+            $('#new-password').val('');
+            $('#new-password-label').text('New Password (leave blank to keep current)');
+            $('#new-first-name').val(firstName);
+            $('#new-last-name').val(lastName);
+            $('#new-role').val(role);
+            $('#confirm-create-user-btn').text('Update User').data('user-id', userId).data('mode', 'edit');
+            $('#create-user-modal').css('display', 'flex');
+
+            $('.edit-dropdown-menu').hide();
+        });
+
+        $(document).on('click', '.cancel-edit-user-btn', function() {
+            loadUsers();
+        });
+
+        $(document).on('click', '.save-user-btn', function() {
+            var userId = $(this).data('user-id');
+            var row = $('#users-table-body tr[data-user-id="' + userId + '"]').first();
+
+            if (row.length === 0) {
+                alert('Error: Could not find user row');
+                return;
+            }
+
+            var email = row.find('.user-email-edit').val().trim();
+            var firstName = row.find('.user-first-name-edit').val().trim();
+            var lastName = row.find('.user-last-name-edit').val().trim();
+            var role = row.find('.user-role-edit').val();
+
+            if (!email) {
+                alert('Email cannot be empty');
+                return;
+            }
+
+            $(this).prop('disabled', true).text('Saving...');
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_update_user',
+                site_url: context.siteUrl,
+                nonce: context.nonce,
+                user_id: userId,
+                email: email,
+                first_name: firstName,
+                last_name: lastName,
+                role: role
+            }, function(response) {
+                if (response.success) {
+                    alert('User updated successfully');
+                } else {
+                    alert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                }
+                loadUsers();
+            }).fail(function() {
+                alert('Network error occurred');
+                loadUsers();
+            });
+        });
+
+        $(document).on('click', '.reset-password-item', function(e) {
+            e.preventDefault();
+            var userId = $(this).data('user-id');
+            var userEmail = $(this).data('user-email');
+
+            $('.edit-dropdown-menu').hide();
+
+            if (!confirm('Send password reset email to ' + userEmail + '?')) {
+                return;
+            }
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_reset_password',
+                site_url: context.siteUrl,
+                nonce: context.nonce,
+                user_id: userId
+            }, function(response) {
+                if (response.success) {
+                    alert('Password reset email sent successfully');
+                } else {
+                    alert('Failed to send password reset: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                }
+                loadUsers();
+            }).fail(function() {
+                alert('Network error occurred');
+                loadUsers();
+            });
+        });
+
+        $(document).on('click', '.delete-user-btn', function() {
+            var userId = $(this).data('user-id');
+            var username = $(this).data('username');
+
+            if (!confirm('Are you sure you want to delete user "' + username + '"? This action cannot be undone.')) {
+                return;
+            }
+
+            $(this).prop('disabled', true).text('Deleting...');
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_delete_user',
+                site_url: context.siteUrl,
+                nonce: context.nonce,
+                user_id: userId
+            }, function(response) {
+                if (response.success) {
+                    loadUsers();
+                } else {
+                    alert('Failed to delete user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    loadUsers();
+                }
+            }).fail(function() {
+                alert('Network error occurred');
+                loadUsers();
+            });
+        });
+
         if (window.location.hash) {
             var hash = window.location.hash.substring(1);
-            var validTabs = ['overview', 'plugins', 'activity', 'logs', 'actions', 'backups'];
+            var validTabs = ['overview', 'plugins', 'users', 'activity', 'logs', 'actions', 'backups'];
 
             if (validTabs.indexOf(hash) !== -1) {
                 $('.watchtower-tab-btn').removeClass('active');
@@ -835,6 +1204,12 @@
                 if (hash === 'activity') {
                     setTimeout(function() {
                         loadActivityLogs();
+                    }, 100);
+                }
+
+                if (hash === 'users') {
+                    setTimeout(function() {
+                        loadUsers();
                     }, 100);
                 }
             }
