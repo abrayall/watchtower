@@ -85,23 +85,28 @@
     }
 
     .watchtower-tab-content {
-        margin-top: 20px;
+        margin-top: 0;
+    }
+
+    .watchtower-tab-content > div:first-child {
+        border-top: none !important;
+        border-radius: 0 0 8px 8px !important;
     }
 
     #tab-overview {
-        margin-top: 20px;
+        margin-top: 0;
     }
 
     #tab-plugins {
-        margin-top: 20px;
+        margin-top: 0;
     }
 
     #tab-logs {
-        margin-top: 20px;
+        margin-top: 0;
     }
 
     #tab-actions {
-        margin-top: 20px;
+        margin-top: 0;
     }
 
     #log-viewer::-webkit-scrollbar {
@@ -249,6 +254,110 @@
     border-top: 1px solid #f0f0f1;
 }
 
+/* Users table desktop styles */
+.user-actions-cell {
+    text-align: right;
+}
+
+.button-group {
+    position: relative;
+    display: inline-block;
+    margin-right: 8px;
+}
+
+.edit-user-quick-btn {
+    border-right: none;
+    border-radius: 4px 0 0 4px;
+    padding: 4px 12px;
+    min-width: auto;
+}
+
+.edit-user-dropdown-btn {
+    padding: 0 3px;
+    border-radius: 0 4px 4px 0 !important;
+    min-width: 20px;
+}
+
+.delete-user-btn {
+    padding: 4px 12px;
+    min-width: auto;
+}
+
+.edit-user-dropdown-btn .dashicons {
+    font-size: 12px;
+    width: 12px;
+    height: 12px;
+    position: relative;
+    top: 0;
+    vertical-align: middle;
+}
+
+.edit-dropdown-menu {
+    display: none;
+    position: absolute;
+    top: 100%;
+    left: 0;
+    background: #fff;
+    border: 1px solid #c3c4c7;
+    box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+    z-index: 999999;
+    min-width: 140px;
+    margin-top: 2px;
+    border-radius: 4px;
+}
+
+.edit-dropdown-item {
+    display: block;
+    padding: 8px 12px;
+    text-decoration: none;
+    color: #2c3338;
+    font-size: 13px;
+    line-height: 1.4;
+}
+
+.edit-dropdown-item:first-child {
+    border-radius: 4px 4px 0 0;
+}
+
+.edit-dropdown-item:last-child {
+    border-radius: 0 0 4px 4px;
+}
+
+.edit-dropdown-item:not(:last-child) {
+    border-bottom: 1px solid #f0f0f1;
+}
+
+.edit-dropdown-item:hover {
+    background: #f6f7f7;
+}
+
+@media (max-width: 1200px) {
+    .user-actions-cell {
+        display: grid;
+        grid-template-columns: 1fr;
+        gap: 8px;
+    }
+
+    .button-group {
+        margin-right: 0;
+        display: grid !important;
+        grid-template-columns: 1fr auto;
+        width: 100% !important;
+    }
+
+    .delete-user-btn {
+        width: 100%;
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .save-user-btn,
+    .cancel-edit-user-btn {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+}
+
 @media (max-width: 782px) {
     #watchtower-page-loading {
         align-items: flex-start !important;
@@ -291,6 +400,7 @@
         width: 48px;
         height: 48px;
     }
+
 }
 
 .metrics-grid {
@@ -300,7 +410,7 @@
     margin-bottom: 20px;
 }
 .metric-tile {
-    background: #fff;
+    background: #f6f7f7;
     border: 1px solid #ccd0d4;
     border-radius: 8px;
     padding: 24px;
@@ -430,5 +540,19 @@
 .backup-component-badge:first-child {
     background: #e5f5fa;
     color: #007cba;
+}
+
+#create-user-btn {
+    display: inline-flex !important;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+}
+
+#create-user-btn .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+    margin-top: 0 !important;
 }
         ';

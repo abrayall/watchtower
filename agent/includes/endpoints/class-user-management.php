@@ -141,6 +141,18 @@ class Watchtower_Agent_User_Management {
                 ),
             ),
         ));
+
+        register_rest_route($this->namespace, '/users/(?P<id>\d+)/reset-password', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'reset_password'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'id' => array(
+                    'type' => 'integer',
+                    'required' => true,
+                ),
+            ),
+        ));
     }
 
     /**
@@ -169,6 +181,8 @@ class Watchtower_Agent_User_Management {
                 'username' => $user->user_login,
                 'email' => $user->user_email,
                 'display_name' => $user->display_name,
+                'first_name' => $user_data->first_name,
+                'last_name' => $user_data->last_name,
                 'roles' => $user_data->roles,
                 'registered' => $user_data->user_registered,
             );
@@ -357,6 +371,36 @@ class Watchtower_Agent_User_Management {
         return new WP_REST_Response(array(
             'success' => true,
             'message' => 'User deleted successfully',
+            'user_id' => $user_id,
+        ), 200);
+    }
+
+    /**
+     * Reset password
+     */
+    public function reset_password($request) {
+        $user_id = $request->get_param('id');
+
+        if (!get_userdata($user_id)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'User not found',
+            ), 404);
+        }
+
+        $user = get_userdata($user_id);
+        $result = retrieve_password($user->user_login);
+
+        if (is_wp_error($result)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $result->get_error_message(),
+            ), 400);
+        }
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => 'Password reset email sent successfully',
             'user_id' => $user_id,
         ), 200);
     }

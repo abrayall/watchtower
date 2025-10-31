@@ -53,7 +53,14 @@ define('WATCHTOWER_MANAGER_DATA_DIR', WP_CONTENT_DIR . '/watchtower/manager/');
  * @return string The translated URL for API calls
  */
 function watchtower_manager_translate_agent_url($site_url, $endpoint) {
-    $full_url = $site_url . '/?rest_route=' . $endpoint;
+    $endpoint_parts = explode('?', $endpoint, 2);
+    $path = $endpoint_parts[0];
+    $query = isset($endpoint_parts[1]) ? $endpoint_parts[1] : '';
+
+    $full_url = $site_url . '/?rest_route=' . $path;
+    if (!empty($query)) {
+        $full_url .= '&' . $query;
+    }
 
     $parsed = parse_url($site_url);
     $host = $parsed['host'] ?? '';
@@ -66,7 +73,10 @@ function watchtower_manager_translate_agent_url($site_url, $endpoint) {
         );
 
         if (isset($port_to_container[$port])) {
-            $full_url = 'http://' . $port_to_container[$port] . '/?rest_route=' . $endpoint;
+            $full_url = 'http://' . $port_to_container[$port] . '/?rest_route=' . $path;
+            if (!empty($query)) {
+                $full_url .= '&' . $query;
+            }
         }
     }
 

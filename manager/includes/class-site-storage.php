@@ -284,6 +284,7 @@ class Watchtower_Manager_Site_Storage {
         }
 
         $this->fetch_and_save_backups($site_url, $agent, $request_args);
+        $this->fetch_and_save_users($site_url, $agent, $request_args);
 
         return $this->save_health_data($site_url, $dynamic_data);
     }
@@ -362,6 +363,82 @@ class Watchtower_Manager_Site_Storage {
         }
 
         return $backups_data;
+    }
+
+    /**
+     * Fetch and save users data from agent
+     */
+    private function fetch_and_save_users($site_url, $agent, $request_args) {
+        $users_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/users?role=administrator');
+
+        $users_request_args = array_merge($request_args, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+        ));
+
+        $users_response = wp_remote_get($users_url, $users_request_args);
+
+        if (is_wp_error($users_response)) {
+            $users_data = array(
+                'success' => false,
+                'error' => $users_response->get_error_message(),
+                'fetched_at' => current_time('mysql'),
+            );
+        } else {
+            $users_body = wp_remote_retrieve_body($users_response);
+            $users_data = json_decode($users_body, true);
+
+            if (!$users_data) {
+                $users_data = array(
+                    'success' => false,
+                    'error' => 'Invalid response from agent',
+                    'fetched_at' => current_time('mysql'),
+                );
+            } else {
+                $users_data['fetched_at'] = current_time('mysql');
+            }
+        }
+
+        $this->save_users_data($site_url, $users_data);
+    }
+
+    /**
+     * Save users data to users.json
+     */
+    private function save_users_data($site_url, $users_data) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'users.json';
+
+        if (!file_exists($site_dir)) {
+            wp_mkdir_p($site_dir);
+        }
+
+        $json = json_encode($users_data, JSON_PRETTY_PRINT);
+        $result = file_put_contents($file_path, $json);
+
+        return $result !== false;
+    }
+
+    /**
+     * Get users data from users.json
+     */
+    public function get_users_data($site_url) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'users.json';
+
+        if (!file_exists($file_path)) {
+            return null;
+        }
+
+        $json = file_get_contents($file_path);
+        $users_data = json_decode($json, true);
+
+        if (!is_array($users_data)) {
+            return null;
+        }
+
+        return $users_data;
     }
 
     /**

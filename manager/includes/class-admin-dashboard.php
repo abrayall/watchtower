@@ -48,6 +48,11 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_delete_backup', array($this, 'ajax_delete_backup'));
         add_action('wp_ajax_watchtower_manager_get_agent', array($this, 'ajax_get_agent'));
         add_action('wp_ajax_watchtower_manager_get_activity_logs', array($this, 'ajax_get_activity_logs'));
+        add_action('wp_ajax_watchtower_manager_get_users', array($this, 'ajax_get_users'));
+        add_action('wp_ajax_watchtower_manager_create_user', array($this, 'ajax_create_user'));
+        add_action('wp_ajax_watchtower_manager_update_user', array($this, 'ajax_update_user'));
+        add_action('wp_ajax_watchtower_manager_delete_user', array($this, 'ajax_delete_user'));
+        add_action('wp_ajax_watchtower_manager_reset_password', array($this, 'ajax_reset_password'));
     }
 
     /**
@@ -116,14 +121,14 @@ class Watchtower_Manager_Admin_Dashboard {
                 'watchtower-details',
                 plugins_url('assets/js/details.js', dirname(__FILE__)),
                 array('jquery', 'jquery-ui-datepicker'),
-                WATCHTOWER_MANAGER_VERSION,
+                WATCHTOWER_MANAGER_VERSION . '-' . time(),
                 true
             );
 
             wp_localize_script('watchtower-details', 'context', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
                 'nonce' => wp_create_nonce('watchtower_manager_nonce'),
-                'siteUrl' => $_GET['site']
+                'siteUrl' => urldecode($_GET['site'])
             ));
         } else {
             wp_enqueue_style(
@@ -280,7 +285,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <th>PHP</th>
                                     <th>Agent</th>
                                     <th>Scanned</th>
-                                    <th>Actions</th>
+                                    <th style="text-align: right;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody>
@@ -362,7 +367,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                             }
                                             ?>
                                         </td>
-                                        <td data-label="Actions">
+                                        <td data-label="Actions" style="text-align: right;">
                                             <div class="actions">
                                                 <a href="<?php echo esc_url(add_query_arg(array(
                                                     'page' => 'watchtower-manager-site-details',
@@ -1141,6 +1146,315 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_send_json_success($data);
     }
 
+    public function ajax_get_users() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Site URL required'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users?role=administrator');
+
+        $response = wp_remote_get($users_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password'])
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_create_user() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $username = isset($_POST['username']) ? sanitize_user($_POST['username']) : '';
+        $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
+        $password = isset($_POST['password']) ? $_POST['password'] : '';
+        $first_name = isset($_POST['first_name']) ? sanitize_text_field($_POST['first_name']) : '';
+        $last_name = isset($_POST['last_name']) ? sanitize_text_field($_POST['last_name']) : '';
+        $role = isset($_POST['role']) ? sanitize_text_field($_POST['role']) : 'subscriber';
+
+        if (empty($site_url) || empty($username) || empty($email) || empty($password)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users');
+
+        $body_data = array(
+            'username' => $username,
+            'email' => $email,
+            'password' => $password,
+            'role' => $role,
+        );
+
+        if (!empty($first_name)) {
+            $body_data['first_name'] = $first_name;
+        }
+
+        if (!empty($last_name)) {
+            $body_data['last_name'] = $last_name;
+        }
+
+        $response = wp_remote_post($users_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($body_data)
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['error'] ?? 'Failed to create user'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_update_user() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+        $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
+        $first_name = isset($_POST['first_name']) ? sanitize_text_field($_POST['first_name']) : '';
+        $last_name = isset($_POST['last_name']) ? sanitize_text_field($_POST['last_name']) : '';
+        $role = isset($_POST['role']) ? sanitize_text_field($_POST['role']) : '';
+        $password = isset($_POST['password']) ? $_POST['password'] : '';
+
+        if (empty($site_url) || empty($user_id)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id);
+
+        $body_data = array();
+
+        if (!empty($email)) {
+            $body_data['email'] = $email;
+        }
+
+        if (!empty($first_name)) {
+            $body_data['first_name'] = $first_name;
+        }
+
+        if (!empty($last_name)) {
+            $body_data['last_name'] = $last_name;
+        }
+
+        if (!empty($role)) {
+            $body_data['role'] = $role;
+        }
+
+        if (!empty($password)) {
+            $body_data['password'] = $password;
+        }
+
+        $response = wp_remote_request($users_url, array(
+            'method' => 'PUT',
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode($body_data)
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['error'] ?? 'Failed to update user'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_delete_user() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if (empty($site_url) || empty($user_id)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id);
+
+        $response = wp_remote_request($users_url, array(
+            'method' => 'DELETE',
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['error'] ?? 'Failed to delete user'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_reset_password() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
+
+        if (empty($site_url) || empty($user_id)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $reset_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id . '/reset-password');
+
+        $response = wp_remote_post($reset_url, array(
+            'timeout' => 30,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['error'] ?? 'Failed to reset password'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
     /**
      * Determine overall health status
      */
@@ -1215,7 +1529,7 @@ class Watchtower_Manager_Admin_Dashboard {
         </a>
         <hr class="wp-header-end">
 
-        <div style="position: relative; min-height: 400px;">
+        <div style="position: relative; min-height: 400px; margin-top: 20px;">
             <div id="watchtower-page-loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #fff; z-index: 100; display: flex; align-items: center; justify-content: center; min-height: 400px;">
                 <div class="watchtower-spinner"></div>
             </div>
@@ -1332,6 +1646,7 @@ class Watchtower_Manager_Admin_Dashboard {
                 <select id="mobile-tab-selector" style="width: 100%; height: 40px; font-size: 16px;">
                     <option value="overview" selected>Overview</option>
                     <option value="plugins">Plugins</option>
+                    <option value="users">Users</option>
                     <option value="activity">Activity</option>
                     <option value="logs">Logs</option>
                     <option value="actions">Actions</option>
@@ -1345,6 +1660,9 @@ class Watchtower_Manager_Admin_Dashboard {
                 </button>
                 <button class="watchtower-tab-btn" data-tab="plugins">
                     <span class="dashicons dashicons-admin-plugins"></span> Plugins
+                </button>
+                <button class="watchtower-tab-btn" data-tab="users">
+                    <span class="dashicons dashicons-admin-users"></span> Users
                 </button>
                 <?php /* Backups tab disabled
                 <button class="watchtower-tab-btn" data-tab="backups">
@@ -1365,6 +1683,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <!-- Tab Content: Overview -->
             <div class="watchtower-tab-content" id="tab-overview">
             <?php if ($has_health_data): ?>
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
                 <!-- Metrics Grid - CPU, Memory, Disk Only -->
                 <div class="metrics-grid">
                     <?php
@@ -1493,6 +1812,7 @@ class Watchtower_Manager_Admin_Dashboard {
                     </div>
                     <?php endif; ?>
                 </div>
+                </div>
 
             <?php else: ?>
                 <!-- Health Data Not Available -->
@@ -1554,6 +1874,89 @@ class Watchtower_Manager_Admin_Dashboard {
                 <?php endif; ?>
             </div>
 
+            <!-- Tab Content: Users -->
+            <div class="watchtower-tab-content" id="tab-users" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                        <h2 style="margin: 0;">Admin Users</h2>
+                        <button id="create-user-btn" class="button button-primary">
+                            <span class="dashicons dashicons-plus-alt"></span> Create User
+                        </button>
+                    </div>
+                    <div id="users-loading" style="text-align: center; padding: 40px;">
+                        <div class="watchtower-spinner" style="margin: 0 auto 15px;"></div>
+                        <p>Loading users...</p>
+                    </div>
+                    <div id="users-container" style="display: none;">
+                        <table class="wp-list-table widefat fixed striped" id="users-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 15%; font-weight: bold;">Username</th>
+                                    <th style="width: 20%; font-weight: bold;">Email</th>
+                                    <th style="width: 15%; font-weight: bold;">First Name</th>
+                                    <th style="width: 15%; font-weight: bold;">Last Name</th>
+                                    <th style="width: 15%; font-weight: bold;">Role</th>
+                                    <th style="width: 20%; text-align: right; font-weight: bold;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="users-table-body">
+                            </tbody>
+                        </table>
+                    </div>
+                    <div id="users-empty" style="display: none; text-align: center; padding: 40px;">
+                        <span class="dashicons dashicons-admin-users" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
+                        <h3>No Admin Users Found</h3>
+                        <p style="color: #646970;">No administrator users were discovered on this site.</p>
+                    </div>
+                    <div id="users-error" style="display: none; background: #fff; padding: 40px; border: 1px solid #ccd0d4; border-radius: 8px; text-align: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 64px; width: 64px; height: 64px; color: #d63638; margin-bottom: 15px;"></span>
+                        <h3>Unable to Load Users</h3>
+                        <p style="color: #646970;" id="users-error-message">An error occurred while loading users.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Create User Modal -->
+            <div id="create-user-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
+                <div style="background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                    <h2 id="user-modal-title" style="margin-top: 0; margin-bottom: 20px;">Create New User</h2>
+                    <div style="margin-bottom: 15px;">
+                        <label for="new-username" style="display: block; margin-bottom: 5px; font-weight: 600;">Username *</label>
+                        <input type="text" id="new-username" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="new-email" style="display: block; margin-bottom: 5px; font-weight: 600;">Email *</label>
+                        <input type="email" id="new-email" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label id="new-password-label" for="new-password" style="display: block; margin-bottom: 5px; font-weight: 600;">Password *</label>
+                        <input type="password" id="new-password" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="new-first-name" style="display: block; margin-bottom: 5px; font-weight: 600;">First Name</label>
+                        <input type="text" id="new-first-name" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 15px;">
+                        <label for="new-last-name" style="display: block; margin-bottom: 5px; font-weight: 600;">Last Name</label>
+                        <input type="text" id="new-last-name" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                    </div>
+                    <div style="margin-bottom: 20px;">
+                        <label for="new-role" style="display: block; margin-bottom: 5px; font-weight: 600;">Role *</label>
+                        <select id="new-role" style="width: 100%; padding: 8px; border: 1px solid #ddd; border-radius: 4px;">
+                            <option value="administrator">Administrator</option>
+                            <option value="editor">Editor</option>
+                            <option value="author">Author</option>
+                            <option value="contributor">Contributor</option>
+                            <option value="subscriber">Subscriber</option>
+                        </select>
+                    </div>
+                    <div style="display: flex; gap: 10px; justify-content: flex-end;">
+                        <button id="cancel-create-user-btn" class="button">Cancel</button>
+                        <button id="confirm-create-user-btn" class="button button-primary">Create User</button>
+                    </div>
+                </div>
+            </div>
+
             <?php /* Backups tab content disabled
             <!-- Tab Content: Backups -->
             <div class="watchtower-tab-content" id="tab-backups" style="display: none;">
@@ -1580,7 +1983,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <th style="width: 25%; font-weight: bold;">Date</th>
                                     <th style="width: 15%; text-align: center; font-weight: bold;">Size</th>
                                     <th style="width: 35%; text-align: center; font-weight: bold;">Components</th>
-                                    <th style="width: 25%; text-align: center; font-weight: bold;">Actions</th>
+                                    <th style="width: 25%; text-align: right; font-weight: bold;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="backups-table-body">
