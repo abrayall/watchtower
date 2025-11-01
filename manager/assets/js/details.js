@@ -181,6 +181,10 @@
             if (tab === 'users') {
                 loadUsers();
             }
+
+            if (tab === 'files') {
+                loadFiles('/');
+            }
         });
 
         $('#mobile-tab-selector').on('change', function() {
@@ -215,6 +219,10 @@
 
             if (tab === 'users') {
                 loadUsers();
+            }
+
+            if (tab === 'files') {
+                loadFiles('/');
             }
         });
 
@@ -630,29 +638,26 @@
         }
 
         function displayActivityLogs(entries) {
-            var html = '<div style="position: relative;">';
-            html += '<table style="width: 100%; border-collapse: collapse;">';
-            html += '<thead><tr style="background: #f0f0f1; position: sticky; top: 0; z-index: 10;">';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1; width: 180px; min-width: 180px;">Time</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Action</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Actor</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">IP Address</th>';
-            html += '<th style="padding: 10px; text-align: left; border-bottom: 2px solid #ccc; font-weight: 600; background: #f0f0f1;">Details</th>';
+            var html = '<table class="wp-list-table widefat fixed striped">';
+            html += '<thead><tr>';
+            html += '<th style="width: 180px;">Time</th>';
+            html += '<th>Action</th>';
+            html += '<th>Actor</th>';
+            html += '<th>IP Address</th>';
+            html += '<th>Details</th>';
             html += '</tr></thead><tbody>';
 
-            entries.forEach(function(entry, index) {
-                var rowStyle = index % 2 === 0 ? 'background: #fff;' : 'background: #f9f9f9;';
-                html += '<tr style="' + rowStyle + '">';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; width: 180px; min-width: 180px; white-space: nowrap;">' + escapeHtml(entry.timestamp) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee;"><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.actor_name) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px;">' + escapeHtml(entry.ip_address) + '</td>';
-                html += '<td style="padding: 8px; border-bottom: 1px solid #eee; font-size: 12px; color: #2c3338; line-height: 1.6;">' + formatDetails(entry.details) + '</td>';
+            entries.forEach(function(entry) {
+                html += '<tr>';
+                html += '<td style="white-space: nowrap;">' + escapeHtml(entry.timestamp) + '</td>';
+                html += '<td><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
+                html += '<td>' + escapeHtml(entry.actor_name) + '</td>';
+                html += '<td>' + escapeHtml(entry.ip_address) + '</td>';
+                html += '<td>' + formatDetails(entry.details) + '</td>';
                 html += '</tr>';
             });
 
             html += '</tbody></table>';
-            html += '</div>';
             $('#activity-log-viewer').html(html);
         }
 
@@ -857,6 +862,8 @@
         function displayUsers(users) {
             var tbody = $('#users-table-body');
             tbody.empty();
+
+            $('#users-count').text(users.length);
 
             users.forEach(function(user) {
                 var currentRole = user.roles.indexOf('administrator') >= 0 ? 'Administrator' :
@@ -1181,7 +1188,7 @@
 
         if (window.location.hash) {
             var hash = window.location.hash.substring(1);
-            var validTabs = ['overview', 'plugins', 'users', 'activity', 'logs', 'actions', 'backups'];
+            var validTabs = ['overview', 'plugins', 'users', 'activity', 'logs', 'files', 'actions', 'backups'];
 
             if (validTabs.indexOf(hash) !== -1) {
                 $('.watchtower-tab-btn').removeClass('active');
@@ -1212,7 +1219,362 @@
                         loadUsers();
                     }, 100);
                 }
+
+                if (hash === 'files') {
+                    setTimeout(function() {
+                        loadFiles('/');
+                    }, 100);
+                }
             }
+        }
+
+        var currentFilePath = '/';
+
+        $('#new-file-btn').on('click', function(e) {
+            e.preventDefault();
+            showCreateDialog('file');
+            return false;
+        });
+
+        $('#new-directory-btn').on('click', function(e) {
+            e.preventDefault();
+            showCreateDialog('directory');
+            return false;
+        });
+
+        function showCreateDialog(type) {
+            var typeName = type === 'directory' ? 'Directory' : 'File';
+            var name = prompt('Enter ' + typeName.toLowerCase() + ' name:');
+
+            if (name && name.trim() !== '') {
+                createFileOrDirectory(type, name.trim());
+            }
+        }
+
+        function createFileOrDirectory(type, name) {
+            var path = currentFilePath === '/' ? '/' + name : currentFilePath + '/' + name;
+
+            console.log('Creating ' + type + ':', path);
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_create_file',
+                site_url: context.siteUrl,
+                path: path,
+                type: type,
+                nonce: context.nonce
+            }, function(response) {
+                if (response.success) {
+                    loadFiles(currentFilePath);
+                } else {
+                    alert('Failed to create ' + type + ': ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                }
+            }).fail(function() {
+                alert('Network error occurred while creating ' + type);
+            });
+        }
+
+        function loadFiles(path) {
+            currentFilePath = path || '/';
+            console.log('Loading files for path:', currentFilePath);
+            $('#file-tree-loading').show();
+            $('#file-tree-container').hide();
+            $('#file-tree-error').hide();
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_list_files',
+                site_url: context.siteUrl,
+                path: currentFilePath,
+                nonce: context.nonce
+            }, function(response) {
+                console.log('Files response:', response);
+                $('#file-tree-loading').hide();
+
+                if (response.success && response.data) {
+                    console.log('Rendering file tree with', response.data.items ? response.data.items.length : 0, 'items');
+                    renderFileTree(response.data);
+                    renderBreadcrumb(currentFilePath);
+                    $('#file-tree-container').show();
+                } else {
+                    console.error('File load error:', response);
+                    $('#file-tree-error-message').text(response.data && response.data.message ? response.data.message : 'Failed to load files');
+                    $('#file-tree-error').show();
+                }
+            }).fail(function(xhr, status, error) {
+                console.error('File load AJAX failed:', status, error);
+                $('#file-tree-loading').hide();
+                $('#file-tree-error-message').text('Network error occurred');
+                $('#file-tree-error').show();
+            });
+        }
+
+        var fileEditor = null;
+        var currentEditingFilePath = null;
+
+        function editFile(path) {
+            console.log('Edit file:', path);
+            currentEditingFilePath = path;
+
+            $('#file-editor-status').text('Loading file...');
+            $('#file-editor-modal').css('display', 'flex');
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_get_file_content',
+                site_url: context.siteUrl,
+                path: path,
+                nonce: context.nonce
+            }, function(response) {
+                if (response.success && response.data) {
+                    var fileName = path.split('/').pop();
+                    $('#file-editor-title').text(fileName);
+                    $('#file-editor-meta').text('Path: ' + path + ' | Size: ' + formatFileSize(response.data.size || 0));
+
+                    if (!fileEditor) {
+                        loadCodeMirror(function() {
+                            initFileEditor(response.data.content, fileName);
+                        });
+                    } else {
+                        fileEditor.setValue(response.data.content || '');
+                        setEditorMode(fileName);
+                    }
+
+                    $('#file-editor-status').text('');
+                } else {
+                    $('#file-editor-status').text('Error: ' + (response.data && response.data.message ? response.data.message : 'Failed to load file'));
+                }
+            }).fail(function() {
+                $('#file-editor-status').text('Network error: Failed to load file');
+            });
+        }
+
+        function loadCodeMirror(callback) {
+            if (window.CodeMirror) {
+                callback();
+                return;
+            }
+
+            var link = document.createElement('link');
+            link.rel = 'stylesheet';
+            link.href = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.css';
+            document.head.appendChild(link);
+
+            var script = document.createElement('script');
+            script.src = 'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/codemirror.min.js';
+            script.onload = function() {
+                loadCodeMirrorModes(callback);
+            };
+            document.head.appendChild(script);
+        }
+
+        function loadCodeMirrorModes(callback) {
+            var modes = [
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/javascript/javascript.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/css/css.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/xml/xml.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/htmlmixed/htmlmixed.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/php/php.min.js',
+                'https://cdnjs.cloudflare.com/ajax/libs/codemirror/5.65.2/mode/clike/clike.min.js'
+            ];
+
+            var loaded = 0;
+            modes.forEach(function(src) {
+                var script = document.createElement('script');
+                script.src = src;
+                script.onload = function() {
+                    loaded++;
+                    if (loaded === modes.length) {
+                        callback();
+                    }
+                };
+                document.head.appendChild(script);
+            });
+        }
+
+        function initFileEditor(content, fileName) {
+            fileEditor = CodeMirror.fromTextArea(document.getElementById('file-editor-content'), {
+                lineNumbers: true,
+                mode: 'text/plain',
+                theme: 'default',
+                indentUnit: 4,
+                indentWithTabs: true,
+                lineWrapping: true
+            });
+
+            fileEditor.setValue(content || '');
+            setEditorMode(fileName);
+        }
+
+        function setEditorMode(fileName) {
+            if (!fileEditor) return;
+
+            var mode = 'text/plain';
+            var ext = fileName.split('.').pop().toLowerCase();
+
+            if (ext === 'js') mode = 'javascript';
+            else if (ext === 'css') mode = 'css';
+            else if (ext === 'html' || ext === 'htm') mode = 'htmlmixed';
+            else if (ext === 'php') mode = 'application/x-httpd-php';
+            else if (ext === 'json') mode = 'application/json';
+            else if (ext === 'xml') mode = 'xml';
+
+            fileEditor.setOption('mode', mode);
+        }
+
+        function saveFileContent() {
+            if (!currentEditingFilePath || !fileEditor) return;
+
+            var content = fileEditor.getValue();
+            $('#file-editor-status').text('Saving...');
+            $('#file-editor-save').prop('disabled', true);
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_save_file',
+                site_url: context.siteUrl,
+                path: currentEditingFilePath,
+                content: content,
+                nonce: context.nonce
+            }, function(response) {
+                if (response.success) {
+                    $('#file-editor-status').text('Saved successfully!');
+                    setTimeout(function() {
+                        $('#file-editor-modal').hide();
+                        $('#file-editor-status').text('');
+                    }, 1000);
+                } else {
+                    $('#file-editor-status').text('Error: ' + (response.data && response.data.message ? response.data.message : 'Failed to save file'));
+                }
+                $('#file-editor-save').prop('disabled', false);
+            }).fail(function() {
+                $('#file-editor-status').text('Network error: Failed to save file');
+                $('#file-editor-save').prop('disabled', false);
+            });
+        }
+
+        $('#file-editor-save').on('click', function() {
+            saveFileContent();
+        });
+
+        $('#file-editor-cancel, #file-editor-close').on('click', function() {
+            $('#file-editor-modal').hide();
+            currentEditingFilePath = null;
+        });
+
+        function renderBreadcrumb(path) {
+            var $breadcrumb = $('#file-path-breadcrumb');
+            $breadcrumb.empty();
+
+            var parts = path.split('/').filter(function(p) { return p.length > 0; });
+
+            $breadcrumb.append('<strong>Path:</strong> ');
+            var $home = $('<a href="javascript:void(0)" data-path="/" style="color: #2271b1; text-decoration: none;">home</a>');
+            $home.on('click', function(e) {
+                e.preventDefault();
+                loadFiles('/');
+                return false;
+            });
+            $breadcrumb.append($home);
+
+            var currentPath = '';
+            parts.forEach(function(part, index) {
+                $breadcrumb.append(' / ');
+                currentPath += '/' + part;
+
+                if (index === parts.length - 1) {
+                    $breadcrumb.append('<span>' + escapeHtml(part) + '</span>');
+                } else {
+                    var $link = $('<a href="javascript:void(0)" data-path="' + currentPath + '" style="color: #2271b1; text-decoration: none;">' + escapeHtml(part) + '</a>');
+                    (function(linkPath) {
+                        $link.on('click', function(e) {
+                            e.preventDefault();
+                            loadFiles(linkPath);
+                            return false;
+                        });
+                    })(currentPath);
+                    $breadcrumb.append($link);
+                }
+            });
+        }
+
+        function renderFileTree(data) {
+            var items = data.items || [];
+            var $tree = $('#file-tree');
+
+            $tree.empty();
+            var $table = $('<table class="wp-list-table widefat fixed striped"></table>');
+            var $thead = $('<thead><tr><th>Name</th><th>Size</th><th>Type</th><th>Permissions</th><th class="actions-column">Actions</th></tr></thead>');
+            var $tbody = $('<tbody></tbody>');
+
+            var totalSize = 0;
+            items.forEach(function(item) {
+                var $row = createFileTableRow(item);
+                $tbody.append($row);
+                if (item.type === 'file' && item.size) {
+                    totalSize += item.size;
+                }
+            });
+
+            $table.append($thead).append($tbody);
+            $tree.append($table);
+
+            $('#file-count').text(items.length);
+            $('#file-total-size').text(formatFileSize(totalSize));
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            var k = 1024;
+            var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
+            return (bytes / Math.pow(k, i)).toFixed(2) + ' ' + sizes[i];
+        }
+
+        function createFileTableRow(item) {
+            var isDirectory = item.type === 'directory';
+            var $row = $('<tr class="file-tree-row"></tr>');
+
+            var $nameCell = $('<td></td>');
+            var $nameContent = $('<div class="file-tree-name-cell"></div>');
+
+            var iconClass = isDirectory ? 'dashicons-category' : 'dashicons-media-default';
+            var $icon = $('<span class="file-tree-icon ' + (isDirectory ? 'directory' : 'file') + '"><span class="dashicons ' + iconClass + '"></span></span>');
+            $nameContent.append($icon);
+
+            var $link = $('<a href="javascript:void(0)" class="file-tree-name" style="color: #2271b1; text-decoration: none;">' + escapeHtml(item.name) + '</a>');
+            $link.on('click', function(e) {
+                e.preventDefault();
+                if (isDirectory) {
+                    loadFiles(item.path);
+                } else {
+                    editFile(item.path);
+                }
+                return false;
+            });
+            $nameContent.append($link);
+            $nameCell.append($nameContent);
+
+            var sizeStr = item.size !== null ? formatFileSize(item.size) : '-';
+            var $sizeCell = $('<td>' + sizeStr + '</td>');
+
+            var typeStr = isDirectory ? 'Directory' : 'File';
+            var $typeCell = $('<td>' + typeStr + '</td>');
+
+            var permsStr = item.permissions || '-';
+            var $permsCell = $('<td>' + permsStr + '</td>');
+
+            var $actionsCell = $('<td class="actions-column file-actions-cell"></td>');
+            var $renameBtn = $('<button type="button" class="button rename-file-btn">Rename</button>');
+            var $deleteBtn = $('<button type="button" class="button button-link-delete delete-file-btn">Delete</button>');
+            $actionsCell.append($renameBtn).append($deleteBtn);
+
+            $row.append($nameCell).append($sizeCell).append($typeCell).append($permsCell).append($actionsCell);
+            return $row;
+        }
+
+        function formatFileSize(bytes) {
+            if (bytes === 0) return '0 B';
+            var k = 1024;
+            var sizes = ['B', 'KB', 'MB', 'GB', 'TB'];
+            var i = Math.floor(Math.log(bytes) / Math.log(k));
+            return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
 
         setTimeout(function() {

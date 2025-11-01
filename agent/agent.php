@@ -46,6 +46,7 @@ require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-user-manage
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-backup-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-update-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-log-management.php';
+require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-file-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-audit-endpoint.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-admin-settings.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-audit-logger.php';
