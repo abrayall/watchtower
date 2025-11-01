@@ -105,6 +105,10 @@
         margin-top: 0;
     }
 
+    #tab-files {
+        margin-top: 0;
+    }
+
     #tab-actions {
         margin-top: 0;
     }
@@ -332,7 +336,8 @@
 }
 
 @media (max-width: 1200px) {
-    .user-actions-cell {
+    .user-actions-cell,
+    .file-actions-cell {
         display: grid;
         grid-template-columns: 1fr;
         gap: 8px;
@@ -353,6 +358,13 @@
 
     .save-user-btn,
     .cancel-edit-user-btn {
+        padding-left: 8px;
+        padding-right: 8px;
+    }
+
+    .file-actions-cell .button {
+        width: 100%;
+        margin-right: 0;
         padding-left: 8px;
         padding-right: 8px;
     }
@@ -542,17 +554,110 @@
     color: #007cba;
 }
 
-#create-user-btn {
+#create-user-btn,
+#new-file-btn,
+#new-directory-btn {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
     gap: 6px;
 }
 
-#create-user-btn .dashicons {
+#create-user-btn .dashicons,
+#new-file-btn .dashicons,
+#new-directory-btn .dashicons {
     font-size: 18px;
     width: 18px;
     height: 18px;
     margin-top: 0 !important;
+}
+
+.wp-list-table th.actions-column,
+.wp-list-table td.actions-column,
+.wp-list-table .user-actions-cell {
+    text-align: right;
+}
+
+.file-tree-name-cell {
+    display: flex;
+    align-items: center;
+}
+
+.file-tree-icon {
+    margin-right: 8px;
+    flex-shrink: 0;
+}
+
+.file-tree-icon .dashicons {
+    font-size: 18px;
+    width: 18px;
+    height: 18px;
+}
+
+.file-tree-icon.directory {
+    color: #f9a825;
+}
+
+.file-tree-icon.file {
+    color: #646970;
+}
+
+.file-tree-name {
+    flex: 1;
+}
+
+.file-actions-cell .button {
+    margin-right: 8px;
+    padding: 4px 12px;
+    min-width: auto;
+}
+
+.file-actions-cell .button:last-child {
+    margin-right: 0;
+}
+
+.file-tree-loading {
+    padding: 12px;
+    color: #646970;
+    font-style: italic;
+    text-align: center;
+}
+
+.wp-list-table td {
+    vertical-align: middle;
+}
+
+.wp-list-table thead th {
+    background-color: #f0f0f1;
+    font-weight: bold;
+    position: sticky;
+    top: 0;
+    z-index: 10;
+}
+
+.wp-list-table.striped > tbody > tr:nth-child(odd) {
+    background-color: #fff;
+}
+
+.wp-list-table.striped > tbody > tr:nth-child(even) {
+    background-color: #f6f7f7;
+}
+
+.rename-file-btn,
+.delete-file-btn {
+    padding: 4px 12px !important;
+    min-width: auto;
+    line-height: 1.4 !important;
+    height: 28px !important;
+}
+
+#activity-log-viewer {
+    border-bottom: 1px solid #ccd0d4;
+}
+
+.CodeMirror {
+    height: 100% !important;
+    font-family: monospace;
+    font-size: 13px;
 }
         ';

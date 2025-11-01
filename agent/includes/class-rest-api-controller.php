@@ -37,6 +37,9 @@ class Watchtower_Agent_REST_Controller {
         $log_management = new Watchtower_Agent_Log_Management($this->namespace);
         $log_management->register_routes();
 
+        $file_management = new Watchtower_Agent_File_Management();
+        $file_management->register_routes();
+
         $audit_endpoint = new WP_Remote_Agent_Audit_Endpoint($this->namespace);
         $audit_endpoint->register_routes();
 

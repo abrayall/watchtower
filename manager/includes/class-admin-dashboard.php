@@ -53,6 +53,10 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_update_user', array($this, 'ajax_update_user'));
         add_action('wp_ajax_watchtower_manager_delete_user', array($this, 'ajax_delete_user'));
         add_action('wp_ajax_watchtower_manager_reset_password', array($this, 'ajax_reset_password'));
+        add_action('wp_ajax_watchtower_manager_list_files', array($this, 'ajax_list_files'));
+        add_action('wp_ajax_watchtower_manager_create_file', array($this, 'ajax_create_file'));
+        add_action('wp_ajax_watchtower_manager_get_file_content', array($this, 'ajax_get_file_content'));
+        add_action('wp_ajax_watchtower_manager_save_file', array($this, 'ajax_save_file'));
     }
 
     /**
@@ -310,7 +314,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                                     <strong><?php echo esc_html($agent['site_name'] ?? $agent['site_url']); ?></strong>
                                                 </a>
                                             </div>
-                                            <div style="font-size: 12px; color: #646970; margin-top: 4px; margin-left: 34px;">
+                                            <div style="font-size: 12px; color: #646970; margin-top: 0; margin-left: 34px;">
                                                 <?php
                                                 if (isset($agent['site_name'])) {
                                                     echo esc_html($agent['site_url']) . ' • ';
@@ -1455,6 +1459,235 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_send_json_success($data);
     }
 
+    public function ajax_list_files() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '/';
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $files_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/list');
+
+        $response = wp_remote_post($files_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'path' => $path
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to list files'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_create_file() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
+        $type = isset($_POST['type']) ? sanitize_text_field($_POST['type']) : '';
+
+        if (empty($site_url) || empty($path) || empty($type)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $endpoint = $type === 'directory' ? '/watchtower-agent/v1/files/create-directory' : '/watchtower-agent/v1/files/save';
+        $create_url = watchtower_manager_translate_agent_url($agent['site_url'], $endpoint);
+
+        $response = wp_remote_post($create_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'path' => $path,
+                'content' => ''
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to create ' . $type));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_get_file_content() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
+
+        if (empty($site_url) || empty($path)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $content_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/content');
+
+        $response = wp_remote_post($content_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'path' => $path
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to get file content'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_save_file() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
+        $content = isset($_POST['content']) ? wp_unslash($_POST['content']) : '';
+
+        if (empty($site_url) || empty($path)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $save_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/save');
+
+        $response = wp_remote_post($save_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'path' => $path,
+                'content' => $content
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to save file'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
     /**
      * Determine overall health status
      */
@@ -1649,6 +1882,7 @@ class Watchtower_Manager_Admin_Dashboard {
                     <option value="users">Users</option>
                     <option value="activity">Activity</option>
                     <option value="logs">Logs</option>
+                    <option value="files">Files</option>
                     <option value="actions">Actions</option>
                 </select>
             </div>
@@ -1674,6 +1908,9 @@ class Watchtower_Manager_Admin_Dashboard {
                 </button>
                 <button class="watchtower-tab-btn" data-tab="logs">
                     <span class="dashicons dashicons-media-text"></span> Logs
+                </button>
+                <button class="watchtower-tab-btn" data-tab="files">
+                    <span class="dashicons dashicons-media-code"></span> Files
                 </button>
                 <button class="watchtower-tab-btn" data-tab="actions">
                     <span class="dashicons dashicons-admin-tools"></span> Actions
@@ -1839,8 +2076,10 @@ class Watchtower_Manager_Admin_Dashboard {
             <div class="watchtower-tab-content" id="tab-plugins" style="display: none;">
                 <?php if ($has_health_data && isset($health_data['plugins']) && !empty($health_data['plugins']['active_plugins'])): ?>
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
-                    <h2>Active Plugins (<?php echo count($health_data['plugins']['active_plugins']); ?>)</h2>
-                    <table class="wp-list-table widefat fixed striped" style="margin-top: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Active Plugins</h2>
+                    </div>
+                    <table class="wp-list-table widefat fixed striped">
                         <thead>
                             <tr>
                                 <th style="font-weight: bold;">Plugin Name</th>
@@ -1864,6 +2103,11 @@ class Watchtower_Manager_Admin_Dashboard {
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+                    <div style="margin-top: 20px;">
+                        <div style="color: #666; font-size: 13px;">
+                            Total: <?php echo count($health_data['plugins']['active_plugins']); ?> plugins
+                        </div>
+                    </div>
                 </div>
                 <?php else: ?>
                 <div style="background: #fff; padding: 40px; border: 1px solid #ccd0d4; border-radius: 8px; text-align: center;">
@@ -1877,7 +2121,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <!-- Tab Content: Users -->
             <div class="watchtower-tab-content" id="tab-users" style="display: none;">
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
                         <h2 style="margin: 0;">Admin Users</h2>
                         <button id="create-user-btn" class="button button-primary">
                             <span class="dashicons dashicons-plus-alt"></span> Create User
@@ -1896,12 +2140,17 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <th style="width: 15%; font-weight: bold;">First Name</th>
                                     <th style="width: 15%; font-weight: bold;">Last Name</th>
                                     <th style="width: 15%; font-weight: bold;">Role</th>
-                                    <th style="width: 20%; text-align: right; font-weight: bold;">Actions</th>
+                                    <th class="actions-column" style="width: 20%;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="users-table-body">
                             </tbody>
                         </table>
+                        <div style="margin-top: 20px;">
+                            <div id="users-stats" style="color: #666; font-size: 13px;">
+                                Total: <span id="users-count">0</span> users
+                            </div>
+                        </div>
                     </div>
                     <div id="users-empty" style="display: none; text-align: center; padding: 40px;">
                         <span class="dashicons dashicons-admin-users" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
@@ -1961,7 +2210,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <!-- Tab Content: Backups -->
             <div class="watchtower-tab-content" id="tab-backups" style="display: none;">
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
                         <h2 style="margin: 0;">Backups</h2>
                         <div style="display: flex; gap: 10px;">
                             <button id="create-backup-btn" class="button button-primary">
@@ -1983,7 +2232,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <th style="width: 25%; font-weight: bold;">Date</th>
                                     <th style="width: 15%; text-align: center; font-weight: bold;">Size</th>
                                     <th style="width: 35%; text-align: center; font-weight: bold;">Components</th>
-                                    <th style="width: 25%; text-align: right; font-weight: bold;">Actions</th>
+                                    <th class="actions-column" style="width: 25%;">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="backups-table-body">
@@ -2032,7 +2281,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <!-- Tab Content: Activity -->
             <div class="watchtower-tab-content" id="tab-activity" style="display: none;">
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 20px; flex-wrap: wrap; gap: 15px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; flex-wrap: wrap; gap: 15px; min-height: 40px;">
                         <h2 style="margin: 0;">Activity Log</h2>
                         <div style="display: flex; gap: 15px; align-items: center; flex-wrap: wrap;">
                             <div style="display: flex; align-items: center;">
@@ -2063,7 +2312,7 @@ class Watchtower_Manager_Admin_Dashboard {
                         </div>
                     </div>
 
-                    <div id="activity-log-viewer" style="background: #fff; border-radius: 4px; border: 1px solid #ddd; min-height: 400px; max-height: 600px; overflow-y: auto; position: relative;">
+                    <div id="activity-log-viewer" style="background: #fff; min-height: 400px; max-height: 600px; overflow-y: auto; position: relative;">
                         <div style="text-align: center; padding: 50px 0; color: #888;">
                             <span class="dashicons dashicons-calendar" style="font-size: 48px; width: 48px; height: 48px;"></span>
                             <p style="margin-top: 15px;">Select a date to view activity logs</p>
@@ -2081,7 +2330,7 @@ class Watchtower_Manager_Admin_Dashboard {
             <!-- Tab Content: Logs -->
             <div class="watchtower-tab-content" id="tab-logs" style="display: none;">
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
                         <h2 style="margin: 0;">Log Viewer</h2>
                         <div style="display: flex; gap: 15px; align-items: center;">
                             <div>
@@ -2111,10 +2360,78 @@ class Watchtower_Manager_Admin_Dashboard {
                 </div>
             </div>
 
+            <!-- Tab Content: Files -->
+            <div class="watchtower-tab-content" id="tab-files" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; gap: 20px; min-height: 40px;">
+                        <div style="display: flex; align-items: baseline; gap: 15px; flex: 1; min-width: 0;">
+                            <h2 style="margin: 0; flex-shrink: 0;">File Browser</h2>
+                            <div id="file-path-breadcrumb" style="font-size: 14px; color: #646970; word-wrap: break-word; overflow-wrap: break-word;">
+                                /
+                            </div>
+                        </div>
+                        <div style="display: flex; gap: 8px; flex-shrink: 0;">
+                            <button type="button" class="button button-primary" id="new-file-btn">
+                                <span class="dashicons dashicons-plus-alt"></span> New File
+                            </button>
+                            <button type="button" class="button button-primary" id="new-directory-btn">
+                                <span class="dashicons dashicons-plus-alt"></span> New Directory
+                            </button>
+                        </div>
+                    </div>
+                    <div id="file-tree-loading" style="text-align: center; padding: 40px;">
+                        <div class="watchtower-spinner" style="margin: 0 auto 15px;"></div>
+                        <p>Loading files...</p>
+                    </div>
+                    <div id="file-tree-container" style="display: none;">
+                        <div id="file-tree" class="file-tree">
+                        </div>
+                        <div style="margin-top: 20px;">
+                            <div id="file-stats" style="color: #666; font-size: 13px; display: flex; justify-content: space-between;">
+                                <span style="padding-left: 2px;">Size: <span id="file-total-size">0 B</span></span>
+                                <span style="padding-right: 2px;">Total: <span id="file-count">0</span> items</span>
+                            </div>
+                        </div>
+                    </div>
+                    <div id="file-tree-error" style="display: none; background: #fff; padding: 40px; border: 1px solid #ccd0d4; border-radius: 8px; text-align: center;">
+                        <span class="dashicons dashicons-warning" style="font-size: 64px; width: 64px; height: 64px; color: #d63638; margin-bottom: 15px;"></span>
+                        <h3>Unable to Load Files</h3>
+                        <p style="color: #646970;" id="file-tree-error-message">An error occurred while loading files.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- File Editor Modal -->
+            <div id="file-editor-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
+                <div style="background: #fff; padding: 0; border-radius: 8px; width: 90%; max-width: 1200px; height: 90vh; max-height: 90vh; box-shadow: 0 10px 40px rgba(0,0,0,0.3); display: flex; flex-direction: column;">
+                    <div style="padding: 20px; border-bottom: 1px solid #ccd0d4; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                        <div>
+                            <h2 id="file-editor-title" style="margin: 0;">Edit File</h2>
+                            <div id="file-editor-meta" style="color: #646970; font-size: 12px; margin-top: 5px;"></div>
+                        </div>
+                        <button id="file-editor-close" class="button" style="padding: 4px 12px;">
+                            <span class="dashicons dashicons-no-alt" style="margin-top: 3px;"></span>
+                        </button>
+                    </div>
+                    <div style="flex: 1; min-height: 0; padding: 0; display: flex; flex-direction: column;">
+                        <textarea id="file-editor-content" style="width: 100%; flex: 1; font-family: monospace; font-size: 13px; padding: 10px; border: none; resize: none;"></textarea>
+                    </div>
+                    <div style="padding: 20px; border-top: 1px solid #ccd0d4; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                        <div id="file-editor-status" style="color: #646970; font-size: 13px;"></div>
+                        <div style="display: flex; gap: 10px;">
+                            <button id="file-editor-cancel" class="button">Cancel</button>
+                            <button id="file-editor-save" class="button button-primary">Save</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
             <!-- Tab Content: Actions -->
             <div class="watchtower-tab-content" id="tab-actions" style="display: none;">
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
-                    <h2>Actions</h2>
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Actions</h2>
+                    </div>
                     <p>
                         <button class="button button-primary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
