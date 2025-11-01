@@ -1888,33 +1888,57 @@ class Watchtower_Manager_Admin_Dashboard {
             </div>
 
             <!-- Tab Navigation (Desktop) -->
-            <div class="watchtower-tabs">
-                <button class="watchtower-tab-btn active" data-tab="overview">
-                    <span class="dashicons dashicons-dashboard"></span> Overview
-                </button>
-                <button class="watchtower-tab-btn" data-tab="plugins">
-                    <span class="dashicons dashicons-admin-plugins"></span> Plugins
-                </button>
-                <button class="watchtower-tab-btn" data-tab="users">
-                    <span class="dashicons dashicons-admin-users"></span> Users
-                </button>
-                <?php /* Backups tab disabled
-                <button class="watchtower-tab-btn" data-tab="backups">
-                    <span class="dashicons dashicons-database-export"></span> Backups
-                </button>
-                */ ?>
-                <button class="watchtower-tab-btn" data-tab="activity">
-                    <span class="dashicons dashicons-clipboard"></span> Activity
-                </button>
-                <button class="watchtower-tab-btn" data-tab="logs">
-                    <span class="dashicons dashicons-media-text"></span> Logs
-                </button>
-                <button class="watchtower-tab-btn" data-tab="files">
-                    <span class="dashicons dashicons-media-code"></span> Files
-                </button>
-                <button class="watchtower-tab-btn" data-tab="actions">
-                    <span class="dashicons dashicons-admin-tools"></span> Actions
-                </button>
+            <div class="watchtower-tabs-wrapper">
+                <div class="watchtower-tabs">
+                    <button class="watchtower-tab-btn active" data-tab="overview">
+                        <span class="dashicons dashicons-dashboard"></span> Overview
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="plugins">
+                        <span class="dashicons dashicons-admin-plugins"></span> Plugins
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="users">
+                        <span class="dashicons dashicons-admin-users"></span> Users
+                    </button>
+                    <?php /* Backups tab disabled
+                    <button class="watchtower-tab-btn" data-tab="backups">
+                        <span class="dashicons dashicons-database-export"></span> Backups
+                    </button>
+                    */ ?>
+                    <button class="watchtower-tab-btn" data-tab="activity">
+                        <span class="dashicons dashicons-clipboard"></span> Activity
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="logs">
+                        <span class="dashicons dashicons-media-text"></span> Logs
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="files">
+                        <span class="dashicons dashicons-media-code"></span> Files
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="security">
+                        <span class="dashicons dashicons-shield"></span> Security
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="performance">
+                        <span class="dashicons dashicons-performance"></span> Performance
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="settings">
+                        <span class="dashicons dashicons-admin-settings"></span> Settings
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="database">
+                        <span class="dashicons dashicons-database"></span> Database
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="advanced">
+                        <span class="dashicons dashicons-admin-generic"></span> Advanced
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="actions">
+                        <span class="dashicons dashicons-admin-tools"></span> Actions
+                    </button>
+                </div>
+                <div class="watchtower-tabs-overflow" style="display: none;">
+                    <button class="watchtower-tab-btn watchtower-overflow-btn">
+                        <span class="dashicons dashicons-arrow-down-alt2"></span> More
+                    </button>
+                    <div class="watchtower-overflow-menu">
+                    </div>
+                </div>
             </div>
 
             <!-- Tab Content: Overview -->
@@ -2124,7 +2148,7 @@ class Watchtower_Manager_Admin_Dashboard {
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
                         <h2 style="margin: 0;">Admin Users</h2>
                         <button id="create-user-btn" class="button button-primary">
-                            <span class="dashicons dashicons-plus-alt"></span> Create User
+                            <span class="dashicons dashicons-plus-alt"></span> User
                         </button>
                     </div>
                     <div id="users-loading" style="text-align: center; padding: 40px;">
@@ -2132,7 +2156,7 @@ class Watchtower_Manager_Admin_Dashboard {
                         <p>Loading users...</p>
                     </div>
                     <div id="users-container" style="display: none;">
-                        <table class="wp-list-table widefat fixed striped" id="users-table">
+                        <table class="wp-list-table widefat fixed striped users-table" id="users-table">
                             <thead>
                                 <tr>
                                     <th style="width: 15%; font-weight: bold;">Username</th>
@@ -2146,6 +2170,8 @@ class Watchtower_Manager_Admin_Dashboard {
                             <tbody id="users-table-body">
                             </tbody>
                         </table>
+                        <div class="mobile-users-grid" id="mobile-users-grid">
+                        </div>
                         <div style="margin-top: 20px;">
                             <div id="users-stats" style="color: #666; font-size: 13px;">
                                 Total: <span id="users-count">0</span> users
@@ -2339,19 +2365,21 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <option value="">Loading...</option>
                                 </select>
                             </div>
-                            <div>
-                                <label for="log-lines-count" style="margin-right: 8px;"><strong>Lines:</strong></label>
-                                <select id="log-lines-count" class="regular-text" style="width: auto;">
-                                    <option value="100" selected>100</option>
-                                    <option value="250">250</option>
-                                    <option value="500">500</option>
-                                    <option value="1000">1000</option>
-                                    <option value="all">All</option>
-                                </select>
+                            <div style="display: flex; gap: 8px; align-items: center;">
+                                <div>
+                                    <label for="log-lines-count" style="margin-right: 8px;"><strong>Lines:</strong></label>
+                                    <select id="log-lines-count" class="regular-text" style="width: auto;">
+                                        <option value="100" selected>100</option>
+                                        <option value="250">250</option>
+                                        <option value="500">500</option>
+                                        <option value="1000">1000</option>
+                                        <option value="all">All</option>
+                                    </select>
+                                </div>
+                                <button id="refresh-logs-btn" class="button" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 10px;" title="Refresh">
+                                    <span class="dashicons dashicons-update" style="margin-top: 0;"></span>
+                                </button>
                             </div>
-                            <button id="refresh-logs-btn" class="button" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 10px;" title="Refresh">
-                                <span class="dashicons dashicons-update" style="margin-top: 0;"></span>
-                            </button>
                         </div>
                     </div>
                     <div id="log-viewer" style="background: #1e1e1e; color: #d4d4d4; padding: 15px; border-radius: 4px; font-family: 'Courier New', monospace; font-size: 13px; max-height: 600px; overflow-y: auto; white-space: pre-wrap; word-wrap: break-word;">
@@ -2372,10 +2400,10 @@ class Watchtower_Manager_Admin_Dashboard {
                         </div>
                         <div style="display: flex; gap: 8px; flex-shrink: 0;">
                             <button type="button" class="button button-primary" id="new-file-btn">
-                                <span class="dashicons dashicons-plus-alt"></span> New File
+                                <span class="dashicons dashicons-plus-alt"></span> File
                             </button>
                             <button type="button" class="button button-primary" id="new-directory-btn">
-                                <span class="dashicons dashicons-plus-alt"></span> New Directory
+                                <span class="dashicons dashicons-plus-alt"></span> Directory
                             </button>
                         </div>
                     </div>
@@ -2433,9 +2461,6 @@ class Watchtower_Manager_Admin_Dashboard {
                         <h2 style="margin: 0;">Actions</h2>
                     </div>
                     <p>
-                        <button class="button button-primary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
-                            <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
-                        </button>
                         <button class="button button-secondary watchtower-scan-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Scan
                         </button>
@@ -2448,13 +2473,80 @@ class Watchtower_Manager_Admin_Dashboard {
                         <button class="button watchtower-toggle-debug-btn" data-site-url="<?php echo esc_attr($site_url); ?>" data-debug-enabled="<?php echo $debug_enabled ? '1' : '0'; ?>">
                             <span class="dashicons dashicons-<?php echo $debug_enabled ? 'no' : 'yes'; ?>" style="margin-top: 3px;"></span> <?php echo $debug_enabled ? 'Disable' : 'Enable'; ?> Debug
                         </button>
-                        <a href="<?php echo esc_url($site_url . '/wp-json/watchtower-agent/v1/info'); ?>" class="button" target="_blank">
-                            View Agent Info (JSON)
-                        </a>
-                        <a href="<?php echo esc_url($site_url . '/wp-json/watchtower-agent/v1/health'); ?>" class="button" target="_blank">
-                            View Health Data (JSON)
-                        </a>
+                        <button class="button button-primary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
+                            <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
+                        </button>
                     </p>
+                </div>
+            </div>
+
+            <!-- Tab Content: Security -->
+            <div class="watchtower-tab-content" id="tab-security" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Security</h2>
+                    </div>
+                    <div style="text-align: center; padding: 60px 20px; color: #646970;">
+                        <span class="dashicons dashicons-shield" style="font-size: 80px; width: 80px; height: 80px; color: #c3c4c7; margin-bottom: 20px;"></span>
+                        <h3 style="font-size: 18px; margin-bottom: 10px;">Security Features Coming Soon</h3>
+                        <p>Security monitoring and management tools will be available here.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Performance -->
+            <div class="watchtower-tab-content" id="tab-performance" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Performance</h2>
+                    </div>
+                    <div style="text-align: center; padding: 60px 20px; color: #646970;">
+                        <span class="dashicons dashicons-performance" style="font-size: 80px; width: 80px; height: 80px; color: #c3c4c7; margin-bottom: 20px;"></span>
+                        <h3 style="font-size: 18px; margin-bottom: 10px;">Performance Monitoring Coming Soon</h3>
+                        <p>Performance metrics and optimization tools will be available here.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Settings -->
+            <div class="watchtower-tab-content" id="tab-settings" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Settings</h2>
+                    </div>
+                    <div style="text-align: center; padding: 60px 20px; color: #646970;">
+                        <span class="dashicons dashicons-admin-settings" style="font-size: 80px; width: 80px; height: 80px; color: #c3c4c7; margin-bottom: 20px;"></span>
+                        <h3 style="font-size: 18px; margin-bottom: 10px;">Settings Management Coming Soon</h3>
+                        <p>WordPress settings configuration and management will be available here.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Database -->
+            <div class="watchtower-tab-content" id="tab-database" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Database</h2>
+                    </div>
+                    <div style="text-align: center; padding: 60px 20px; color: #646970;">
+                        <span class="dashicons dashicons-database" style="font-size: 80px; width: 80px; height: 80px; color: #c3c4c7; margin-bottom: 20px;"></span>
+                        <h3 style="font-size: 18px; margin-bottom: 10px;">Database Management Coming Soon</h3>
+                        <p>Database tools and optimization features will be available here.</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Tab Content: Advanced -->
+            <div class="watchtower-tab-content" id="tab-advanced" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Advanced</h2>
+                    </div>
+                    <div style="text-align: center; padding: 60px 20px; color: #646970;">
+                        <span class="dashicons dashicons-admin-generic" style="font-size: 80px; width: 80px; height: 80px; color: #c3c4c7; margin-bottom: 20px;"></span>
+                        <h3 style="font-size: 18px; margin-bottom: 10px;">Advanced Features Coming Soon</h3>
+                        <p>Advanced configuration and management tools will be available here.</p>
+                    </div>
                 </div>
             </div>
             </div>

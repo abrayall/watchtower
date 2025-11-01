@@ -41,11 +41,18 @@
         }
     }
 
+    .watchtower-tabs-wrapper {
+        display: flex;
+        align-items: flex-end;
+        margin: 20px 0 0 0;
+        border-bottom: 1px solid #ccd0d4;
+        position: relative;
+    }
+
     .watchtower-tabs {
         display: flex;
         gap: 0;
-        margin: 20px 0 0 0;
-        border-bottom: 1px solid #ccd0d4;
+        overflow: hidden;
     }
 
     .watchtower-tab-btn {
@@ -82,6 +89,60 @@
         border-bottom: 2px solid #fff;
         margin-bottom: -1px;
         font-weight: 600;
+        font-size: 14px;
+    }
+
+    .watchtower-tabs-overflow {
+        position: relative;
+        flex-shrink: 0;
+    }
+
+    .watchtower-overflow-btn {
+        white-space: nowrap;
+        margin-right: 0 !important;
+    }
+
+    .watchtower-overflow-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        right: 0;
+        background: #fff;
+        border: 1px solid #ccd0d4;
+        border-top: none;
+        border-radius: 0 0 4px 4px;
+        box-shadow: 0 2px 8px rgba(0,0,0,0.15);
+        z-index: 1000;
+        min-width: 200px;
+        margin-top: -1px;
+    }
+
+    .watchtower-overflow-menu.show {
+        display: block;
+    }
+
+    .watchtower-overflow-menu .watchtower-tab-btn {
+        width: 100%;
+        border: none;
+        border-radius: 0;
+        border-bottom: 1px solid #f0f0f1;
+        margin: 0;
+        justify-content: flex-start;
+        padding: 12px 16px;
+    }
+
+    .watchtower-overflow-menu .watchtower-tab-btn:last-child {
+        border-bottom: none;
+        border-radius: 0 0 4px 4px;
+    }
+
+    .watchtower-overflow-menu .watchtower-tab-btn:hover {
+        background: #f6f7f7;
+    }
+
+    .watchtower-overflow-menu .watchtower-tab-btn.active {
+        border-bottom: 1px solid #f0f0f1;
+        background: #f0f6fc;
     }
 
     .watchtower-tab-content {
@@ -384,6 +445,322 @@
         display: block !important;
     }
 
+    .watchtower-tabs-wrapper {
+        border: none !important;
+    }
+
+    .watchtower-tab-content > div > div:first-child:not(:has(button)):not(:has(select)):not(:has(.button)):not(:has(input)):not(.metrics-grid) {
+        display: none !important;
+    }
+
+    .metrics-grid {
+        margin-top: 2px !important;
+    }
+
+    #tab-actions p {
+        display: flex !important;
+        flex-direction: column !important;
+        gap: 10px !important;
+    }
+
+    #tab-actions .button {
+        width: 100% !important;
+        justify-content: center !important;
+    }
+
+    #tab-actions .button .dashicons {
+        margin-top: 0 !important;
+        vertical-align: middle !important;
+    }
+
+    #tab-plugins table th:nth-child(3),
+    #tab-plugins table td:nth-child(3) {
+        display: none !important;
+    }
+
+    .users-table {
+        display: none !important;
+    }
+
+    .mobile-users-grid {
+        display: block !important;
+    }
+
+    .mobile-user-card {
+        background: #fff;
+        border: 1px solid #ccd0d4;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 16px;
+    }
+
+    .mobile-user-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        margin-bottom: 12px;
+        gap: 12px;
+    }
+
+    .mobile-user-title {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mobile-user-title strong {
+        font-size: 16px;
+        color: #1d2327;
+        word-break: break-word;
+        display: block;
+        margin-bottom: 4px;
+    }
+
+    .mobile-user-role {
+        flex-shrink: 0;
+        display: inline-block;
+        padding: 4px 10px;
+        border-radius: 4px;
+        font-size: 11px;
+        font-weight: 600;
+        text-transform: uppercase;
+        background: #e5f5fa;
+        color: #007cba;
+    }
+
+    .mobile-user-info {
+        padding: 12px 0;
+        border-top: 1px solid #f0f0f1;
+        border-bottom: 1px solid #f0f0f1;
+        margin-bottom: 12px;
+    }
+
+    .mobile-user-meta {
+        font-size: 12px;
+        color: #646970;
+        margin-bottom: 6px;
+        word-break: break-word;
+    }
+
+    .mobile-user-actions {
+        display: flex;
+        gap: 8px;
+        flex-wrap: wrap;
+    }
+
+    .mobile-user-actions .button {
+        flex: 1;
+        min-width: 70px;
+        text-align: center;
+    }
+
+    .activity-table {
+        display: none !important;
+    }
+
+    .mobile-activity-grid {
+        display: block !important;
+        list-style: none;
+    }
+
+    .mobile-activity-card {
+        list-style: none;
+        background: #fff;
+        border: 1px solid #ccd0d4;
+        border-radius: 8px;
+        padding: 16px;
+        margin-bottom: 12px;
+    }
+
+    .mobile-activity-header {
+        display: flex;
+        justify-content: space-between;
+        align-items: flex-start;
+        gap: 12px;
+    }
+
+    .mobile-activity-left {
+        flex: 1;
+        min-width: 0;
+    }
+
+    .mobile-activity-actor {
+        font-size: 12px;
+        color: #1d2327;
+        font-weight: 500;
+        margin-bottom: 2px;
+        word-break: break-word;
+    }
+
+    .mobile-activity-time {
+        font-size: 11px;
+        color: #646970;
+    }
+
+    .mobile-activity-action {
+        display: inline-block;
+        background: #e3f2fd;
+        padding: 6px 10px;
+        border-radius: 4px;
+        font-size: 12px;
+        font-weight: 600;
+        color: #0073aa;
+        white-space: nowrap;
+        flex-shrink: 0;
+    }
+
+    .mobile-activity-info {
+        padding-top: 12px;
+        margin-top: 12px;
+        border-top: 1px solid #f0f0f1;
+    }
+
+    .mobile-activity-meta {
+        font-size: 12px;
+        color: #646970;
+        margin-bottom: 6px;
+        word-break: break-word;
+    }
+
+    .mobile-activity-meta:last-child {
+        margin-bottom: 0;
+    }
+
+    #tab-users h2,
+    #tab-activity h2,
+    #tab-files h2,
+    #tab-logs h2 {
+        display: none !important;
+    }
+
+    #tab-logs > div > div:first-child {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+    }
+
+    #tab-logs > div > div:first-child > div:last-child {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 8px !important;
+        justify-content: flex-start !important;
+    }
+
+    #tab-logs > div > div:first-child > div:last-child > div {
+        width: 100% !important;
+        display: flex !important;
+        flex-direction: row !important;
+        align-items: center !important;
+        gap: 8px !important;
+    }
+
+    #tab-logs > div > div:first-child label {
+        display: inline-block !important;
+        margin: 0 !important;
+        margin-right: 8px !important;
+        min-width: 55px !important;
+        flex-shrink: 0 !important;
+    }
+
+    #tab-logs > div > div:first-child select {
+        flex: 1 !important;
+    }
+
+    #tab-logs #log-type-selector {
+        margin-left: -12px !important;
+    }
+
+    #tab-logs #log-lines-count {
+        min-width: 100px !important;
+        margin-left: -8px !important;
+    }
+
+    #tab-logs #refresh-logs-btn {
+        margin-top: 2px !important;
+    }
+
+    #tab-files > div > div:first-child {
+        flex-direction: column !important;
+        align-items: flex-start !important;
+        gap: 15px !important;
+    }
+
+    #tab-files > div > div:first-child > div:first-child {
+        width: 100%;
+    }
+
+    #tab-files > div > div:first-child > div:last-child {
+        width: 100%;
+        justify-content: flex-start !important;
+    }
+
+    #tab-files #file-path-breadcrumb {
+        width: 100%;
+    }
+
+    #tab-files .wp-list-table th:nth-child(2),
+    #tab-files .wp-list-table td:nth-child(2),
+    #tab-files .wp-list-table th:nth-child(3),
+    #tab-files .wp-list-table td:nth-child(3),
+    #tab-files .wp-list-table th:nth-child(4),
+    #tab-files .wp-list-table td:nth-child(4) {
+        display: none !important;
+    }
+
+    #tab-files .file-actions-cell {
+        text-align: right !important;
+        white-space: nowrap !important;
+        display: table-cell !important;
+    }
+
+    #tab-files .file-actions-cell .button {
+        padding: 0 !important;
+        width: 32px !important;
+        height: 32px !important;
+        min-width: 32px !important;
+        min-height: 32px !important;
+        max-height: 32px !important;
+        display: inline-flex !important;
+        align-items: center !important;
+        justify-content: center !important;
+        margin: 0 0 0 4px !important;
+        vertical-align: middle !important;
+        float: none !important;
+    }
+
+    #tab-files .file-actions-cell .button:first-child {
+        margin-left: 0 !important;
+    }
+
+    #tab-files .file-actions-cell .button .button-text {
+        display: none !important;
+    }
+
+    #tab-files .file-actions-cell .button .dashicons {
+        margin: 0 !important;
+        font-size: 18px !important;
+        width: 18px !important;
+        height: 18px !important;
+        line-height: 1 !important;
+    }
+
+    .watchtower-tab-content > div:first-child {
+        border-radius: 8px !important;
+    }
+
+    #tab-overview > div,
+    #tab-health > div,
+    #tab-plugins > div,
+    #tab-themes > div,
+    #tab-users > div,
+    #tab-activity > div,
+    #tab-logs > div,
+    #tab-files > div {
+        border-radius: 8px !important;
+        border-top: 1px solid #ccd0d4 !important;
+    }
+
     .health-status-card {
         flex-direction: column;
         align-items: flex-start;
@@ -413,6 +790,25 @@
         height: 48px;
     }
 
+    #activity-action-filter .dashicons-arrow-down-alt2,
+    #activity-actor-filter .dashicons-arrow-down-alt2 {
+        margin-top: 10px !important;
+    }
+
+    #activity-log-viewer {
+        overflow-y: visible !important;
+    }
+
+}
+
+@media (min-width: 783px) {
+    .watchtower-tab-btn[data-tab="security"],
+    .watchtower-tab-btn[data-tab="performance"],
+    .watchtower-tab-btn[data-tab="settings"],
+    .watchtower-tab-btn[data-tab="database"],
+    .watchtower-tab-btn[data-tab="advanced"] {
+        display: none !important;
+    }
 }
 
 .metrics-grid {
@@ -659,5 +1055,51 @@
     height: 100% !important;
     font-family: monospace;
     font-size: 13px;
+}
+
+#file-editor-close {
+    display: inline-flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    min-height: 30px !important;
+}
+
+#file-editor-close .dashicons {
+    margin-top: 0 !important;
+}
+
+@media (min-width: 783px) {
+    .users-table {
+        display: table !important;
+    }
+
+    .mobile-users-grid {
+        display: none !important;
+    }
+
+    .activity-table {
+        display: table !important;
+    }
+
+    .mobile-activity-grid {
+        display: none !important;
+    }
+
+    #tab-files .file-actions-cell .button {
+        width: auto !important;
+        height: auto !important;
+        min-width: auto !important;
+        min-height: auto !important;
+        max-height: none !important;
+        padding: 4px 8px !important;
+    }
+
+    #tab-files .file-actions-cell .button .button-text {
+        display: inline !important;
+    }
+
+    #tab-files .file-actions-cell .button .dashicons {
+        display: none !important;
+    }
 }
         ';
