@@ -99,42 +99,6 @@
         .watchtower-mobile-tab-selector {
             display: block !important;
         }
-
-        #tab-logs > div > div:first-child {
-            flex-direction: column !important;
-            align-items: flex-start !important;
-            gap: 15px !important;
-        }
-
-        #tab-logs > div > div:first-child h2 {
-            width: 100%;
-        }
-
-        #tab-logs > div > div:first-child > div {
-            width: 100%;
-            flex-direction: row !important;
-            gap: 8px !important;
-            flex-wrap: nowrap !important;
-        }
-
-        #tab-logs > div > div:first-child > div > div {
-            flex: 1;
-            min-width: 0;
-        }
-
-        #tab-logs > div > div:first-child label {
-            display: none;
-        }
-
-        #tab-logs > div > div:first-child select {
-            width: 100%;
-        }
-
-        #tab-logs > div > div:first-child button {
-            width: auto;
-            min-width: 40px;
-            flex-shrink: 0;
-        }
     }
 .watchtower-manager-dashboard {
     margin: 20px 0;

@@ -149,6 +149,10 @@
         $('.watchtower-tab-btn').on('click', function() {
             var tab = $(this).data('tab');
 
+            if (!tab) {
+                return;
+            }
+
             $('.watchtower-tab-btn').removeClass('active');
             $(this).addClass('active');
 
@@ -158,6 +162,8 @@
             $('#tab-' + tab).show();
 
             window.location.hash = '#' + tab;
+
+            $('.watchtower-overflow-menu').removeClass('show');
 
             if (tab === 'logs') {
                 if (!$('#log-type-selector').data('loaded')) {
@@ -638,27 +644,47 @@
         }
 
         function displayActivityLogs(entries) {
-            var html = '<table class="wp-list-table widefat fixed striped">';
-            html += '<thead><tr>';
-            html += '<th style="width: 180px;">Time</th>';
-            html += '<th>Action</th>';
-            html += '<th>Actor</th>';
-            html += '<th>IP Address</th>';
-            html += '<th>Details</th>';
-            html += '</tr></thead><tbody>';
+            var tableHtml = '<table class="wp-list-table widefat fixed striped activity-table">';
+            tableHtml += '<thead><tr>';
+            tableHtml += '<th style="width: 180px;">Time</th>';
+            tableHtml += '<th>Action</th>';
+            tableHtml += '<th>Actor</th>';
+            tableHtml += '<th>IP Address</th>';
+            tableHtml += '<th>Details</th>';
+            tableHtml += '</tr></thead><tbody>';
 
             entries.forEach(function(entry) {
-                html += '<tr>';
-                html += '<td style="white-space: nowrap;">' + escapeHtml(entry.timestamp) + '</td>';
-                html += '<td><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
-                html += '<td>' + escapeHtml(entry.actor_name) + '</td>';
-                html += '<td>' + escapeHtml(entry.ip_address) + '</td>';
-                html += '<td>' + formatDetails(entry.details) + '</td>';
-                html += '</tr>';
+                tableHtml += '<tr>';
+                tableHtml += '<td style="white-space: nowrap;">' + escapeHtml(entry.timestamp) + '</td>';
+                tableHtml += '<td><span style="background: #e3f2fd; padding: 4px 8px; border-radius: 3px; font-size: 11px; font-weight: 500;">' + escapeHtml(entry.action) + '</span></td>';
+                tableHtml += '<td>' + escapeHtml(entry.actor_name) + '</td>';
+                tableHtml += '<td>' + escapeHtml(entry.ip_address) + '</td>';
+                tableHtml += '<td>' + formatDetails(entry.details) + '</td>';
+                tableHtml += '</tr>';
             });
 
-            html += '</tbody></table>';
-            $('#activity-log-viewer').html(html);
+            tableHtml += '</tbody></table>';
+
+            var mobileHtml = '<div class="mobile-activity-grid">';
+            entries.forEach(function(entry) {
+                mobileHtml += '<div class="mobile-activity-card">';
+                mobileHtml += '<div class="mobile-activity-header">';
+                mobileHtml += '<div class="mobile-activity-left">';
+                mobileHtml += '<div class="mobile-activity-actor">' + escapeHtml(entry.actor_name) + ' • ' + escapeHtml(entry.ip_address) + '</div>';
+                mobileHtml += '<div class="mobile-activity-time">' + escapeHtml(entry.timestamp) + '</div>';
+                mobileHtml += '</div>';
+                mobileHtml += '<div class="mobile-activity-action">' + escapeHtml(entry.action) + '</div>';
+                mobileHtml += '</div>';
+                if (entry.details && Object.keys(entry.details).length > 0) {
+                    mobileHtml += '<div class="mobile-activity-info">';
+                    mobileHtml += '<div class="mobile-activity-meta">' + formatDetails(entry.details) + '</div>';
+                    mobileHtml += '</div>';
+                }
+                mobileHtml += '</div>';
+            });
+            mobileHtml += '</div>';
+
+            $('#activity-log-viewer').html(tableHtml + mobileHtml);
         }
 
         function escapeHtml(text) {
@@ -863,6 +889,9 @@
             var tbody = $('#users-table-body');
             tbody.empty();
 
+            var mobileGrid = $('#mobile-users-grid');
+            mobileGrid.empty();
+
             $('#users-count').text(users.length);
 
             users.forEach(function(user) {
@@ -891,6 +920,29 @@
                     '</td>' +
                     '</tr>');
                 tbody.append(row);
+
+                var fullName = '';
+                if (user.first_name || user.last_name) {
+                    fullName = escapeHtml((user.first_name || '') + ' ' + (user.last_name || '')).trim();
+                }
+
+                var card = $('<div class="mobile-user-card" data-user-id="' + user.id + '" data-email="' + escapeHtml(user.email) + '" data-first-name="' + escapeHtml(user.first_name || '') + '" data-last-name="' + escapeHtml(user.last_name || '') + '" data-role="' + user.roles[0] + '" data-username="' + escapeHtml(user.username) + '">' +
+                    '<div class="mobile-user-header">' +
+                    '<div class="mobile-user-title">' +
+                    '<strong>' + escapeHtml(user.username) + '</strong>' +
+                    (fullName ? '<div class="mobile-user-meta">' + fullName + '</div>' : '') +
+                    '</div>' +
+                    '<div class="mobile-user-role">' + currentRole + '</div>' +
+                    '</div>' +
+                    '<div class="mobile-user-info">' +
+                    '<div class="mobile-user-meta">' + escapeHtml(user.email) + '</div>' +
+                    '</div>' +
+                    '<div class="mobile-user-actions">' +
+                    '<button class="button button-primary mobile-edit-user-btn" data-user-id="' + user.id + '">Edit</button>' +
+                    '<button class="button delete-user-btn" data-user-id="' + user.id + '" data-username="' + escapeHtml(user.username) + '">Delete</button>' +
+                    '</div>' +
+                    '</div>');
+                mobileGrid.append(card);
             });
 
             $('.edit-dropdown-item').on('mouseenter', function() {
@@ -988,10 +1040,10 @@
                     } else {
                         alert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
                     }
-                    $('#confirm-create-user-btn').prop('disabled', false).text('Update User');
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Update');
                 }).fail(function() {
                     alert('Network error occurred');
-                    $('#confirm-create-user-btn').prop('disabled', false).text('Update User');
+                    $('#confirm-create-user-btn').prop('disabled', false).text('Update');
                 });
             }
         });
@@ -1076,7 +1128,7 @@
             $('#new-first-name').val(firstName);
             $('#new-last-name').val(lastName);
             $('#new-role').val(role);
-            $('#confirm-create-user-btn').text('Update User').data('user-id', userId).data('mode', 'edit');
+            $('#confirm-create-user-btn').text('Update').data('user-id', userId).data('mode', 'edit');
             $('#create-user-modal').css('display', 'flex');
 
             $('.edit-dropdown-menu').hide();
@@ -1156,6 +1208,29 @@
                 alert('Network error occurred');
                 loadUsers();
             });
+        });
+
+        $(document).on('click', '.mobile-edit-user-btn', function(e) {
+            e.preventDefault();
+            var userId = $(this).data('user-id');
+            var card = $('.mobile-user-card[data-user-id="' + userId + '"]');
+
+            var email = card.data('email');
+            var firstName = card.data('first-name');
+            var lastName = card.data('last-name');
+            var role = card.data('role');
+            var username = card.data('username');
+
+            $('#user-modal-title').text('Edit User');
+            $('#new-username').val(username).prop('disabled', true);
+            $('#new-email').val(email);
+            $('#new-password').val('');
+            $('#new-password-label').text('New Password (leave blank to keep current)');
+            $('#new-first-name').val(firstName);
+            $('#new-last-name').val(lastName);
+            $('#new-role').val(role);
+            $('#confirm-create-user-btn').text('Update').data('user-id', userId).data('mode', 'edit');
+            $('#create-user-modal').css('display', 'flex');
         });
 
         $(document).on('click', '.delete-user-btn', function() {
@@ -1275,7 +1350,10 @@
 
         function loadFiles(path) {
             currentFilePath = path || '/';
-            console.log('Loading files for path:', currentFilePath);
+            console.log('=== LOADING FILES ===');
+            console.log('Path:', currentFilePath);
+            console.log('Site URL:', context.siteUrl);
+            console.log('Ajax URL:', context.ajaxurl);
             $('#file-tree-loading').show();
             $('#file-tree-container').hide();
             $('#file-tree-error').hide();
@@ -1286,7 +1364,10 @@
                 path: currentFilePath,
                 nonce: context.nonce
             }, function(response) {
-                console.log('Files response:', response);
+                console.log('=== FILES RESPONSE ===');
+                console.log('Full response:', response);
+                console.log('Response.data:', response.data);
+                console.log('Response.data.items:', response.data ? response.data.items : 'no data');
                 $('#file-tree-loading').hide();
 
                 if (response.success && response.data) {
@@ -1561,8 +1642,8 @@
             var $permsCell = $('<td>' + permsStr + '</td>');
 
             var $actionsCell = $('<td class="actions-column file-actions-cell"></td>');
-            var $renameBtn = $('<button type="button" class="button rename-file-btn">Rename</button>');
-            var $deleteBtn = $('<button type="button" class="button button-link-delete delete-file-btn">Delete</button>');
+            var $renameBtn = $('<button type="button" class="button rename-file-btn"><span class="dashicons dashicons-randomize"></span><span class="button-text">Rename</span></button>');
+            var $deleteBtn = $('<button type="button" class="button button-link-delete delete-file-btn"><span class="dashicons dashicons-trash"></span><span class="button-text">Delete</span></button>');
             $actionsCell.append($renameBtn).append($deleteBtn);
 
             $row.append($nameCell).append($sizeCell).append($typeCell).append($permsCell).append($actionsCell);
@@ -1576,6 +1657,65 @@
             var i = Math.floor(Math.log(bytes) / Math.log(k));
             return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
         }
+
+        function handleTabOverflow() {
+            var $wrapper = $('.watchtower-tabs-wrapper');
+            var $tabs = $('.watchtower-tabs');
+            var $overflow = $('.watchtower-tabs-overflow');
+            var $overflowMenu = $('.watchtower-overflow-menu');
+            var $tabButtons = $('.watchtower-tabs > .watchtower-tab-btn');
+
+            if ($(window).width() <= 782) {
+                $overflow.hide();
+                $tabButtons.show();
+                $overflowMenu.empty();
+                return;
+            }
+
+            var wrapperWidth = $wrapper.width();
+            var availableWidth = wrapperWidth - 150;
+            var totalWidth = 0;
+            var overflowTabs = [];
+
+            $tabButtons.each(function(index) {
+                totalWidth += $(this).outerWidth(true);
+                if (totalWidth > availableWidth) {
+                    overflowTabs.push($(this));
+                }
+            });
+
+            if (overflowTabs.length > 0) {
+                $overflow.show();
+                $overflowMenu.empty();
+
+                overflowTabs.forEach(function($tab) {
+                    var $clone = $tab.clone(true);
+                    $overflowMenu.append($clone);
+                    $tab.hide();
+                });
+            } else {
+                $overflow.hide();
+                $tabButtons.show();
+                $overflowMenu.empty();
+            }
+        }
+
+        $('.watchtower-overflow-btn').on('click', function(e) {
+            e.stopPropagation();
+            $('.watchtower-overflow-menu').toggleClass('show');
+        });
+
+        $(document).on('click', function(e) {
+            if (!$(e.target).closest('.watchtower-tabs-overflow').length) {
+                $('.watchtower-overflow-menu').removeClass('show');
+            }
+        });
+
+        $(window).on('resize', function() {
+            handleTabOverflow();
+        });
+
+        handleTabOverflow();
 
         setTimeout(function() {
             $('#watchtower-page-loading').fadeOut(300, function() {
