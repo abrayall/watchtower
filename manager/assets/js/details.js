@@ -67,7 +67,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_update_agent',
-                site_url: siteUrl,
+                site: siteUrl,
                 nonce: context.nonce
             }, function(response) {
                 if (response.success) {
@@ -99,7 +99,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_toggle_debug',
-                site_url: siteUrl,
+                site: siteUrl,
                 enabled: newState,
                 nonce: context.nonce
             }, function(response) {
@@ -128,7 +128,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_scan_agent',
-                site_url: siteUrl,
+                site: siteUrl,
                 nonce: context.nonce
             }, function(response) {
                 if (response.success) {
@@ -240,7 +240,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_backups',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce
             }, function(response) {
                 $('#backups-loading').hide();
@@ -301,7 +301,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_create_backup',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce
             }, function(response) {
                 if (response.success) {
@@ -343,7 +343,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_restore_backup',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 backup_id: backupId,
                 nonce: context.nonce
             }, function(response) {
@@ -364,7 +364,7 @@
             restoreProgressInterval = setInterval(function() {
                 $.post(context.ajaxurl, {
                     action: 'watchtower_manager_get_restore_status',
-                    site_url: context.siteUrl,
+                    site: context.siteUrl,
                     nonce: context.nonce
                 }, function(response) {
                     if (response.success && response.data.success) {
@@ -413,7 +413,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_delete_backup',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 backup_id: backupId,
                 nonce: context.nonce
             }, function(response) {
@@ -438,7 +438,7 @@
         function loadAvailableLogs() {
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_available_logs',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce
             }, function(response) {
                 if (response.success && response.data.logs) {
@@ -514,7 +514,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_logs',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 log_type: logType,
                 lines: lines,
                 nonce: context.nonce
@@ -601,7 +601,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_activity_logs',
-                site_url: activitySiteUrl,
+                site: activitySiteUrl,
                 from: startOfDay,
                 to: endOfDay,
                 nonce: context.nonce
@@ -860,7 +860,7 @@
                 type: 'POST',
                 data: {
                     action: 'watchtower_manager_get_users',
-                    site_url: context.siteUrl,
+                    site: context.siteUrl,
                     nonce: context.nonce
                 },
                 timeout: 30000,
@@ -989,7 +989,7 @@
 
                 $.post(context.ajaxurl, {
                     action: 'watchtower_manager_create_user',
-                    site_url: context.siteUrl,
+                    site: context.siteUrl,
                     nonce: context.nonce,
                     username: username,
                     email: email,
@@ -1019,7 +1019,7 @@
 
                 var updateData = {
                     action: 'watchtower_manager_update_user',
-                    site_url: context.siteUrl,
+                    site: context.siteUrl,
                     nonce: context.nonce,
                     user_id: userId,
                     email: email,
@@ -1161,7 +1161,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_update_user',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce,
                 user_id: userId,
                 email: email,
@@ -1194,7 +1194,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_reset_password',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce,
                 user_id: userId
             }, function(response) {
@@ -1245,7 +1245,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_delete_user',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 nonce: context.nonce,
                 user_id: userId
             }, function(response) {
@@ -1333,7 +1333,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_create_file',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 path: path,
                 type: type,
                 nonce: context.nonce
@@ -1360,7 +1360,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_list_files',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 path: currentFilePath,
                 nonce: context.nonce
             }, function(response) {
@@ -1400,7 +1400,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_file_content',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 path: path,
                 nonce: context.nonce
             }, function(response) {
@@ -1509,7 +1509,7 @@
 
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_save_file',
-                site_url: context.siteUrl,
+                site: context.siteUrl,
                 path: currentEditingFilePath,
                 content: content,
                 nonce: context.nonce

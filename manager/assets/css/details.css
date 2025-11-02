@@ -92,6 +92,11 @@
         font-size: 14px;
     }
 
+    .watchtower-tab-btn[data-tab="actions"] {
+        border-right: 1px solid #ccd0d4;
+        margin-right: 0;
+    }
+
     .watchtower-tabs-overflow {
         position: relative;
         flex-shrink: 0;

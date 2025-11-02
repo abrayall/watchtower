@@ -170,7 +170,7 @@ class Watchtower_Manager_Admin_Dashboard {
         $agents_with_health = array();
 
         foreach ($agents as $agent) {
-            $health_data = $this->site_storage->get_health_data($agent['site_url']);
+            $health_data = $this->site_storage->get_health_data($agent['site']);
             $health_status = $this->determine_health_status($health_data);
 
             $agent['health_status'] = $health_status;
@@ -191,8 +191,8 @@ class Watchtower_Manager_Admin_Dashboard {
                 return $a_priority - $b_priority;
             }
 
-            $a_name = isset($a['site_name']) ? $a['site_name'] : $a['site_url'];
-            $b_name = isset($b['site_name']) ? $b['site_name'] : $b['site_url'];
+            $a_name = isset($a['name']) ? $a['name'] : $a['site'];
+            $b_name = isset($b['name']) ? $b['name'] : $b['site'];
 
             return strcasecmp($a_name, $b_name);
         });
@@ -297,32 +297,32 @@ class Watchtower_Manager_Admin_Dashboard {
                                     <?php
                                     $details_url = add_query_arg(array(
                                         'page' => 'watchtower-manager-site-details',
-                                        'site' => urlencode($agent['site_url'])
+                                        'site' => urlencode($agent['site'])
                                     ), admin_url('admin.php'));
                                     ?>
                                     <tr data-site-index="<?php echo $index; ?>" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $agent['health_status']; ?>" class="clickable-row site-row">
                                         <td>
                                             <div class="site-url">
-                                                <a href="<?php echo esc_url($agent['site_url']); ?>" target="_blank">
-                                                    <?php if (isset($agent['site_icon']) && $agent['site_icon']): ?>
-                                                        <img src="<?php echo esc_url($agent['site_icon']); ?>" alt="" class="site-icon">
+                                                <a href="<?php echo esc_url($agent['site']); ?>" target="_blank">
+                                                    <?php if (isset($agent['icon']) && $agent['icon']): ?>
+                                                        <img src="<?php echo esc_url($agent['icon']); ?>" alt="" class="site-icon">
                                                     <?php else: ?>
                                                         <div class="site-icon-placeholder">
                                                             <span class="dashicons dashicons-admin-site"></span>
                                                         </div>
                                                     <?php endif; ?>
-                                                    <strong><?php echo esc_html($agent['site_name'] ?? $agent['site_url']); ?></strong>
+                                                    <strong><?php echo esc_html($agent['name'] ?? $agent['site']); ?></strong>
                                                 </a>
                                             </div>
                                             <div style="font-size: 12px; color: #646970; margin-top: 0; margin-left: 34px;">
                                                 <?php
-                                                if (isset($agent['site_name'])) {
-                                                    echo esc_html($agent['site_url']) . ' • ';
+                                                if (isset($agent['name'])) {
+                                                    echo esc_html($agent['site']) . ' • ';
                                                 }
                                                 echo esc_html($agent['username']);
                                                 ?>
                                                 <button type="button" class="button-link copy-credentials-btn"
-                                                        data-site-url="<?php echo esc_attr($agent['site_url']); ?>"
+                                                        data-site="<?php echo esc_attr($agent['site']); ?>"
                                                         data-username="<?php echo esc_attr($agent['username']); ?>"
                                                         data-password="<?php echo esc_attr($agent['password']); ?>"
                                                         style="margin-left: 4px; cursor: pointer; vertical-align: middle; text-decoration: none; outline: none; border: none; background: none; padding: 0;"
@@ -363,7 +363,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td data-label="Agent"><?php echo esc_html($agent['agent_version']); ?></td>
                                         <td data-label="Scanned">
                                             <?php
-                                            $health_age = $this->site_storage->get_health_data_age($agent['site_url']);
+                                            $health_age = $this->site_storage->get_health_data_age($agent['site']);
                                             if ($health_age !== null) {
                                                 echo $health_age < 60 ? 'just now' : human_time_diff(current_time('timestamp') - $health_age, current_time('timestamp')) . ' ago';
                                             } else {
@@ -375,22 +375,22 @@ class Watchtower_Manager_Admin_Dashboard {
                                             <div class="actions">
                                                 <a href="<?php echo esc_url(add_query_arg(array(
                                                     'page' => 'watchtower-manager-site-details',
-                                                    'site' => urlencode($agent['site_url'])
+                                                    'site' => urlencode($agent['site'])
                                                 ), admin_url('admin.php'))); ?>"
                                                    class="button button-small button-primary">
                                                     Details
                                                 </a>
-                                                <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site_url'] . '/wp-admin')); ?>"
+                                                <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
                                                    class="button button-small"
                                                    target="_blank">
                                                     WordPress
                                                 </a>
                                                 <button class="button button-small scan-site"
-                                                        data-site-url="<?php echo esc_attr($agent['site_url']); ?>">
+                                                        data-site="<?php echo esc_attr($agent['site']); ?>">
                                                     Scan
                                                 </button>
                                                 <button class="button button-small button-link-delete remove-site"
-                                                        data-site-url="<?php echo esc_attr($agent['site_url']); ?>">
+                                                        data-site="<?php echo esc_attr($agent['site']); ?>">
                                                     Remove
                                                 </button>
                                             </div>
@@ -416,23 +416,23 @@ class Watchtower_Manager_Admin_Dashboard {
                             <?php
                             $details_url = add_query_arg(array(
                                 'page' => 'watchtower-manager-site-details',
-                                'site' => urlencode($agent['site_url'])
+                                'site' => urlencode($agent['site'])
                             ), admin_url('admin.php'));
                             $health_status = $agent['health_status'];
-                            $health_age = $this->site_storage->get_health_data_age($agent['site_url']);
+                            $health_age = $this->site_storage->get_health_data_age($agent['site']);
                             ?>
                             <div class="mobile-site-tile site-row" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $health_status; ?>" onclick="window.location.href='<?php echo esc_url($details_url); ?>'">
                                 <div class="mobile-site-header">
                                     <div class="mobile-site-title">
-                                        <a href="<?php echo esc_url($agent['site_url']); ?>" target="_blank" onclick="event.stopPropagation();">
-                                            <?php if (isset($agent['site_icon']) && $agent['site_icon']): ?>
-                                                <img src="<?php echo esc_url($agent['site_icon']); ?>" alt="" class="site-icon">
+                                        <a href="<?php echo esc_url($agent['site']); ?>" target="_blank" onclick="event.stopPropagation();">
+                                            <?php if (isset($agent['icon']) && $agent['icon']): ?>
+                                                <img src="<?php echo esc_url($agent['icon']); ?>" alt="" class="site-icon">
                                             <?php else: ?>
                                                 <div class="site-icon-placeholder">
                                                     <span class="dashicons dashicons-admin-site"></span>
                                                 </div>
                                             <?php endif; ?>
-                                            <strong><?php echo esc_html($agent['site_name'] ?? $agent['site_url']); ?></strong>
+                                            <strong><?php echo esc_html($agent['name'] ?? $agent['site']); ?></strong>
                                         </a>
                                     </div>
                                     <div class="mobile-site-health">
@@ -458,8 +458,8 @@ class Watchtower_Manager_Admin_Dashboard {
                                 <div class="mobile-site-info">
                                     <div class="mobile-site-meta">
                                         <?php
-                                        if (isset($agent['site_name'])) {
-                                            echo esc_html($agent['site_url']) . ' • ';
+                                        if (isset($agent['name'])) {
+                                            echo esc_html($agent['site']) . ' • ';
                                         }
                                         echo esc_html($agent['username']);
                                         ?>
@@ -480,19 +480,19 @@ class Watchtower_Manager_Admin_Dashboard {
                                     </div>
                                 </div>
                                 <div class="mobile-site-actions">
-                                    <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site_url'] . '/wp-admin')); ?>"
+                                    <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
                                        class="button button-small"
                                        target="_blank"
                                        onclick="event.stopPropagation();">
                                         WordPress
                                     </a>
                                     <button class="button button-small scan-site"
-                                            data-site-url="<?php echo esc_attr($agent['site_url']); ?>"
+                                            data-site="<?php echo esc_attr($agent['site']); ?>"
                                             onclick="event.stopPropagation();">
                                         Scan
                                     </button>
                                     <button class="button button-small button-link-delete remove-site"
-                                            data-site-url="<?php echo esc_attr($agent['site_url']); ?>"
+                                            data-site="<?php echo esc_attr($agent['site']); ?>"
                                             onclick="event.stopPropagation();">
                                         Remove
                                     </button>
@@ -566,7 +566,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $result = $this->storage->remove_agent($site_url);
 
         if ($result) {
@@ -586,7 +586,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -636,7 +636,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -666,7 +666,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -705,7 +705,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $log_type = sanitize_text_field($_POST['log_type']);
         $lines = $_POST['lines'] === 'all' ? 'all' : intval($_POST['lines']);
 
@@ -750,7 +750,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $enabled = isset($_POST['enabled']) && $_POST['enabled'] === 'true';
 
         $agent = $this->storage->get_agent_by_url($site_url);
@@ -800,7 +800,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -872,7 +872,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -917,7 +917,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $backup_id = intval($_POST['backup_id']);
 
         $agent = $this->storage->get_agent_by_url($site_url);
@@ -979,7 +979,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -1022,7 +1022,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = sanitize_text_field($_POST['site_url']);
+        $site_url = sanitize_text_field($_POST['site']);
         $backup_id = intval($_POST['backup_id']);
 
         $agent = $this->storage->get_agent_by_url($site_url);
@@ -1068,7 +1068,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
 
         if (empty($site_url)) {
             wp_send_json_error(array('message' => 'Site URL required'));
@@ -1095,7 +1095,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $from = isset($_POST['from']) ? intval($_POST['from']) : null;
         $to = isset($_POST['to']) ? intval($_POST['to']) : null;
         $lines = isset($_POST['lines']) ? intval($_POST['lines']) : null;
@@ -1112,7 +1112,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $translated_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/audit');
+        $translated_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/audit');
 
         $query_params = array();
         if ($lines !== null) {
@@ -1157,7 +1157,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
 
         if (empty($site_url)) {
             wp_send_json_error(array('message' => 'Site URL required'));
@@ -1171,7 +1171,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users?role=administrator');
+        $users_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/users?role=administrator');
 
         $response = wp_remote_get($users_url, array(
             'timeout' => 30,
@@ -1203,7 +1203,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $username = isset($_POST['username']) ? sanitize_user($_POST['username']) : '';
         $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
         $password = isset($_POST['password']) ? $_POST['password'] : '';
@@ -1223,7 +1223,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users');
+        $users_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/users');
 
         $body_data = array(
             'username' => $username,
@@ -1277,7 +1277,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
         $email = isset($_POST['email']) ? sanitize_email($_POST['email']) : '';
         $first_name = isset($_POST['first_name']) ? sanitize_text_field($_POST['first_name']) : '';
@@ -1297,7 +1297,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id);
+        $users_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/users/' . $user_id);
 
         $body_data = array();
 
@@ -1359,7 +1359,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
 
         if (empty($site_url) || empty($user_id)) {
@@ -1374,7 +1374,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $users_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id);
+        $users_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/users/' . $user_id);
 
         $response = wp_remote_request($users_url, array(
             'method' => 'DELETE',
@@ -1413,7 +1413,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $user_id = isset($_POST['user_id']) ? intval($_POST['user_id']) : 0;
 
         if (empty($site_url) || empty($user_id)) {
@@ -1428,7 +1428,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $reset_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/users/' . $user_id . '/reset-password');
+        $reset_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/users/' . $user_id . '/reset-password');
 
         $response = wp_remote_post($reset_url, array(
             'timeout' => 30,
@@ -1466,7 +1466,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '/';
 
         if (empty($site_url)) {
@@ -1481,7 +1481,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $files_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/list');
+        $files_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/files/list');
 
         $response = wp_remote_post($files_url, array(
             'timeout' => 30,
@@ -1522,7 +1522,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
         $type = isset($_POST['type']) ? sanitize_text_field($_POST['type']) : '';
 
@@ -1539,7 +1539,7 @@ class Watchtower_Manager_Admin_Dashboard {
         }
 
         $endpoint = $type === 'directory' ? '/watchtower-agent/v1/files/create-directory' : '/watchtower-agent/v1/files/save';
-        $create_url = watchtower_manager_translate_agent_url($agent['site_url'], $endpoint);
+        $create_url = watchtower_manager_translate_agent_url($agent['site'], $endpoint);
 
         $response = wp_remote_post($create_url, array(
             'timeout' => 30,
@@ -1581,7 +1581,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
 
         if (empty($site_url) || empty($path)) {
@@ -1596,7 +1596,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $content_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/content');
+        $content_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/files/content');
 
         $response = wp_remote_post($content_url, array(
             'timeout' => 30,
@@ -1637,7 +1637,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_send_json_error(array('message' => 'Permission denied'));
         }
 
-        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
         $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
         $content = isset($_POST['content']) ? wp_unslash($_POST['content']) : '';
 
@@ -1653,7 +1653,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $save_url = watchtower_manager_translate_agent_url($agent['site_url'], '/watchtower-agent/v1/files/save');
+        $save_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/files/save');
 
         $response = wp_remote_post($save_url, array(
             'timeout' => 30,
@@ -1778,8 +1778,8 @@ class Watchtower_Manager_Admin_Dashboard {
                 <div class="health-status-content">
                     <div class="health-status-info">
                         <div class="health-status-title">
-                            <?php echo esc_html($agent['site_name'] ?? $site_url); ?>
-                            <?php if (isset($agent['site_name'])): ?>
+                            <?php echo esc_html($agent['name'] ?? $site_url); ?>
+                            <?php if (isset($agent['name'])): ?>
                                 <div style="font-size: 14px; font-weight: 400; color: #646970;">
                                     <?php echo esc_html($site_url); ?>
                                 </div>
@@ -2461,7 +2461,7 @@ class Watchtower_Manager_Admin_Dashboard {
                         <h2 style="margin: 0;">Actions</h2>
                     </div>
                     <p>
-                        <button class="button button-secondary watchtower-scan-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
+                        <button class="button button-secondary watchtower-scan-btn" data-site="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Scan
                         </button>
                         <?php
@@ -2470,10 +2470,10 @@ class Watchtower_Manager_Admin_Dashboard {
                             $debug_enabled = $agent['constants']['WP_DEBUG_LOG'];
                         }
                         ?>
-                        <button class="button watchtower-toggle-debug-btn" data-site-url="<?php echo esc_attr($site_url); ?>" data-debug-enabled="<?php echo $debug_enabled ? '1' : '0'; ?>">
+                        <button class="button watchtower-toggle-debug-btn" data-site="<?php echo esc_attr($site_url); ?>" data-debug-enabled="<?php echo $debug_enabled ? '1' : '0'; ?>">
                             <span class="dashicons dashicons-<?php echo $debug_enabled ? 'no' : 'yes'; ?>" style="margin-top: 3px;"></span> <?php echo $debug_enabled ? 'Disable' : 'Enable'; ?> Debug
                         </button>
-                        <button class="button button-primary watchtower-update-agent-btn" data-site-url="<?php echo esc_attr($site_url); ?>">
+                        <button class="button button-primary watchtower-update-agent-btn" data-site="<?php echo esc_attr($site_url); ?>">
                             <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
                         </button>
                     </p>

@@ -36,7 +36,7 @@ class Watchtower_Manager_REST_Controller {
             'callback' => array($this, 'register_agent'),
             'permission_callback' => '__return_true', // Public endpoint
             'args' => array(
-                'site_url' => array(
+                'site' => array(
                     'required' => true,
                     'type' => 'string',
                     'sanitize_callback' => 'esc_url_raw',
@@ -91,7 +91,7 @@ class Watchtower_Manager_REST_Controller {
             'callback' => array($this, 'delete_agent'),
             'permission_callback' => array($this, 'check_permission'),
             'args' => array(
-                'site_url' => array(
+                'site' => array(
                     'required' => true,
                     'type' => 'string',
                 ),
@@ -109,7 +109,7 @@ class Watchtower_Manager_REST_Controller {
             'callback' => array($this, 'update_agent_password'),
             'permission_callback' => '__return_true', // Public endpoint
             'args' => array(
-                'site_url' => array(
+                'site' => array(
                     'required' => true,
                     'type' => 'string',
                 ),
@@ -125,19 +125,19 @@ class Watchtower_Manager_REST_Controller {
      * Register a new agent
      */
     public function register_agent($request) {
-        $site_url = $request->get_param('site_url');
+        $site_url = $request->get_param('site');
         $username = $request->get_param('username');
         $password = $request->get_param('password');
 
         if (empty($site_url) || empty($username) || empty($password)) {
             return new WP_REST_Response(array(
                 'success' => false,
-                'error' => 'Missing required fields: site_url, username, password',
+                'error' => 'Missing required fields: site, username, password',
             ), 400);
         }
 
         $agent_data = array(
-            'site_url' => $site_url,
+            'site' => $site_url,
             'username' => $username,
             'password' => $password,
             'wordpress_version' => $request->get_param('wordpress_version') ?: 'unknown',
@@ -207,7 +207,7 @@ class Watchtower_Manager_REST_Controller {
      * Delete agent
      */
     public function delete_agent($request) {
-        $site_url = $request->get_param('site_url');
+        $site_url = $request->get_param('site');
 
         $result = $this->storage->remove_agent($site_url);
 
@@ -240,7 +240,7 @@ class Watchtower_Manager_REST_Controller {
      * Update agent password
      */
     public function update_agent_password($request) {
-        $site_url = $request->get_param('site_url');
+        $site_url = $request->get_param('site');
         $password = $request->get_param('password');
 
         $agent = $this->storage->get_agent_by_url($site_url);
