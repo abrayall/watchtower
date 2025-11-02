@@ -114,6 +114,10 @@ function watchtower_agent_activate() {
         wp_schedule_event(strtotime('next Sunday 23:00'), 'weekly', 'watchtower_agent_weekly_backup');
     }
 
+    if (!wp_next_scheduled('watchtower_agent_register_periodic')) {
+        wp_schedule_event(time(), 'twicedaily', 'watchtower_agent_register_periodic');
+    }
+
     require_once ABSPATH . 'wp-admin/includes/user.php';
 
     $admin_users = get_users(array(
@@ -192,7 +196,7 @@ function watchtower_agent_register_with_manager($username, $password) {
         $storage = new Watchtower_Manager_Agent_Storage();
 
         $agent_data = array(
-            'site_url' => get_site_url(),
+            'site' => get_site_url(),
             'admin_url' => get_admin_url(),
             'username' => $username,
             'password' => $password,
@@ -207,7 +211,7 @@ function watchtower_agent_register_with_manager($username, $password) {
             error_log('Watchtower Agent: Successfully registered with manager (local)');
 
             update_option('watchtower_manager_url', get_site_url());
-            update_option('watchtower_external_site_url', $agent_data['site_url']);  // URL manager knows us by
+            update_option('watchtower_external_site_url', $agent_data['site']);  // URL manager knows us by
             if (empty(get_option('watchtower_manager_key'))) {
                 update_option('watchtower_manager_key', 'local-manager');
             }
@@ -230,7 +234,7 @@ function watchtower_agent_register_with_manager($username, $password) {
         $manager_url = $manager_base_url . '/wp-json/watchtower-manager/v1/register';
 
         $registration_data = array(
-            'site_url' => get_site_url(),
+            'site' => get_site_url(),
             'admin_url' => get_admin_url(),
             'username' => $username,
             'password' => $password,
@@ -260,7 +264,7 @@ function watchtower_agent_register_with_manager($username, $password) {
             error_log('Watchtower Agent: Successfully registered with manager (remote)');
 
             update_option('watchtower_manager_url', $manager_base_url);
-            update_option('watchtower_external_site_url', $registration_data['site_url']);  // URL manager knows us by
+            update_option('watchtower_external_site_url', $registration_data['site']);  // URL manager knows us by
             if (empty(get_option('watchtower_manager_key'))) {
                 update_option('watchtower_manager_key', 'local-manager');
             }
@@ -274,6 +278,66 @@ function watchtower_agent_register_with_manager($username, $password) {
     }
 }
 
+add_action('watchtower_agent_register_periodic', 'watchtower_agent_register_periodic_callback');
+function watchtower_agent_register_periodic_callback() {
+    $manager_url = get_option('watchtower_manager_url');
+    if (empty($manager_url) && empty(get_option('watchtower_agent_manager_url'))) {
+        error_log('Watchtower Agent: Periodic registration skipped - no manager URL configured');
+        return;
+    }
+
+    require_once ABSPATH . 'wp-admin/includes/user.php';
+
+    $admin_users = get_users(array(
+        'role' => 'administrator',
+        'number' => 1,
+        'orderby' => 'ID',
+        'order' => 'ASC'
+    ));
+
+    if (empty($admin_users)) {
+        error_log('Watchtower Agent: Periodic registration skipped - no admin user found');
+        return;
+    }
+
+    $admin_user = $admin_users[0];
+
+    if (!class_exists('WP_Application_Passwords')) {
+        error_log('Watchtower Agent: Periodic registration skipped - Application Passwords not available');
+        return;
+    }
+
+    $existing_passwords = WP_Application_Passwords::get_user_application_passwords($admin_user->ID);
+    foreach ($existing_passwords as $existing) {
+        if ($existing['name'] === 'watchtower-agent') {
+            WP_Application_Passwords::delete_application_password($admin_user->ID, $existing['uuid']);
+            error_log('Watchtower Agent: Deleted old application password for periodic registration');
+            break;
+        }
+    }
+
+    $result = WP_Application_Passwords::create_new_application_password($admin_user->ID, array(
+        'name' => 'watchtower-agent'
+    ));
+
+    if (is_wp_error($result)) {
+        error_log('Watchtower Agent: Failed to create new application password: ' . $result->get_error_message());
+        return;
+    }
+
+    list($password, $password_data) = $result;
+
+    error_log('Watchtower Agent: Generated new application password for periodic registration');
+
+    $register_result = watchtower_agent_register_with_manager($admin_user->user_login, $password);
+
+    if ($register_result === true) {
+        error_log('Watchtower Agent: Periodic registration successful');
+    } else {
+        error_log('Watchtower Agent: Periodic registration failed: ' . $register_result);
+    }
+}
+
 register_deactivation_hook(__FILE__, 'watchtower_agent_deactivate');
 function watchtower_agent_deactivate() {
     flush_rewrite_rules();
@@ -281,6 +345,11 @@ function watchtower_agent_deactivate() {
     $timestamp = wp_next_scheduled('watchtower_agent_weekly_backup');
     if ($timestamp) {
         wp_unschedule_event($timestamp, 'watchtower_agent_weekly_backup');
+    }
+
+    $timestamp = wp_next_scheduled('watchtower_agent_register_periodic');
+    if ($timestamp) {
+        wp_unschedule_event($timestamp, 'watchtower_agent_register_periodic');
     }
 }
 
@@ -743,7 +812,7 @@ function watchtower_agent_execute_restore_callback($timestamp) {
                         if ($manager_url && $manager_key && $external_site_url) {
                             $response = wp_remote_post($manager_url . '/?rest_route=/watchtower-manager/v1/update-agent-password', array(
                                 'body' => json_encode(array(
-                                    'site_url' => $external_site_url,  // Use external URL manager knows about, not internal site_url()
+                                    'site' => $external_site_url,
                                     'password' => $plaintext_password,
                                 )),
                                 'headers' => array(

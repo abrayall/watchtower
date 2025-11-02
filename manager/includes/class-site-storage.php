@@ -78,7 +78,7 @@ class Watchtower_Manager_Site_Storage {
         $file_path = $this->get_health_file_path($site_url);
 
         $health_data['checked_at'] = current_time('mysql');
-        $health_data['site_url'] = $site_url;
+        $health_data['site'] = $site_url;
 
         if (!file_exists($site_dir)) {
             wp_mkdir_p($site_dir);
@@ -139,7 +139,7 @@ class Watchtower_Manager_Site_Storage {
      * Fetch and save health data from agent
      */
     public function fetch_and_save_health($agent) {
-        $site_url = $agent['site_url'];
+        $site_url = $agent['site'];
 
         $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
         $health_url = $site_url . '/?rest_route=/watchtower-agent/v1/health';
@@ -226,16 +226,16 @@ class Watchtower_Manager_Site_Storage {
         }
 
         if (!empty($static_data) || $agent_version) {
-            $update_data = array_merge(array('site_url' => $site_url), $static_data);
+            $update_data = array_merge(array('site' => $site_url), $static_data);
 
-            if (isset($static_data['wordpress']['site_name'])) {
-                $update_data['site_name'] = $static_data['wordpress']['site_name'];
+            if (isset($static_data['wordpress']['name'])) {
+                $update_data['name'] = $static_data['wordpress']['name'];
             }
             if (isset($static_data['wordpress']['admin_url'])) {
                 $update_data['admin_url'] = $static_data['wordpress']['admin_url'];
             }
-            if (isset($static_data['wordpress']['site_icon'])) {
-                $update_data['site_icon'] = $static_data['wordpress']['site_icon'];
+            if (isset($static_data['wordpress']['icon'])) {
+                $update_data['icon'] = $static_data['wordpress']['icon'];
             }
             if (isset($static_data['wordpress']['version'])) {
                 $update_data['wordpress_version'] = $static_data['wordpress']['version'];
@@ -275,7 +275,7 @@ class Watchtower_Manager_Site_Storage {
                     $info_data = json_decode($info_body, true);
                     if ($info_data && isset($info_data['version'])) {
                         $agent_storage->save_agent(array(
-                            'site_url' => $site_url,
+                            'site' => $site_url,
                             'agent_version' => $info_data['version']
                         ));
                     }
@@ -457,7 +457,7 @@ class Watchtower_Manager_Site_Storage {
             );
         }
 
-        $site_url = $agent_data['site_url'];
+        $site_url = $agent_data['site'];
         $info_url = $site_url . '/?rest_route=/watchtower-agent/v1/info';
 
         $parsed_agent = parse_url($site_url);

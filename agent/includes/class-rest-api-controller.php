@@ -84,10 +84,10 @@ class Watchtower_Agent_REST_Controller {
         $site_icon_url = get_site_icon_url();
         $wordpress_info = array(
             'version' => get_bloginfo('version'),
-            'site_url' => get_site_url(),
+            'site' => get_site_url(),
             'home_url' => get_home_url(),
-            'site_name' => get_bloginfo('name'),
-            'site_icon' => $site_icon_url ? $site_icon_url : null,
+            'name' => get_bloginfo('name'),
+            'icon' => $site_icon_url ? $site_icon_url : null,
             'admin_url' => get_admin_url(),
             'admin_email' => get_option('admin_email'),
             'language' => get_locale(),
@@ -226,10 +226,10 @@ class Watchtower_Agent_REST_Controller {
         $site_icon_url = get_site_icon_url();
         $wordpress_info = array(
             'version' => get_bloginfo('version'),
-            'site_url' => get_site_url(),
+            'site' => get_site_url(),
             'home_url' => get_home_url(),
-            'site_name' => get_bloginfo('name'),
-            'site_icon' => $site_icon_url ? $site_icon_url : null,
+            'name' => get_bloginfo('name'),
+            'icon' => $site_icon_url ? $site_icon_url : null,
             'admin_url' => admin_url(),
             'admin_email' => get_option('admin_email'),
             'language' => get_locale(),

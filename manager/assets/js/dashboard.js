@@ -60,14 +60,14 @@
             $('.scan-site').on('click', function(e) {
                 e.preventDefault();
                 var button = $(this);
-                var siteUrl = button.data('site-url');
+                var siteUrl = button.data('site');
                 var originalText = button.text();
 
                 button.text('Scanning...').prop('disabled', true);
 
                 $.post(context.ajaxurl, {
                     action: 'watchtower_manager_scan_agent',
-                    site_url: siteUrl,
+                    site: siteUrl,
                     nonce: context.nonce
                 }, function(response) {
                     if (response.success) {
@@ -85,7 +85,7 @@
             $('.remove-site').on('click', function(e) {
                 e.preventDefault();
                 var button = $(this);
-                var siteUrl = button.data('site-url');
+                var siteUrl = button.data('site');
 
                 if (!confirm('Are you sure you want to remove this site from the manager?')) {
                     return;
@@ -95,7 +95,7 @@
 
                 $.post(context.ajaxurl, {
                     action: 'watchtower_manager_remove_agent',
-                    site_url: siteUrl,
+                    site: siteUrl,
                     nonce: context.nonce
                 }, function(response) {
                     if (response.success) {
@@ -116,7 +116,7 @@
                 e.preventDefault();
                 e.stopPropagation(); // Prevent row click
                 var button = $(this);
-                var siteUrl = button.data('site-url');
+                var siteUrl = button.data('site');
                 var username = button.data('username');
                 var password = button.data('password');
 

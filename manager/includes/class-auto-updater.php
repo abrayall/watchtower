@@ -65,6 +65,10 @@ class Watchtower_Manager_Auto_Updater {
             return null;
         }
 
+        usort($files, function($a, $b) {
+            return filemtime($b) - filemtime($a);
+        });
+
         return $files[0];
     }
 
@@ -115,7 +119,7 @@ class Watchtower_Manager_Auto_Updater {
             );
         }
 
-        $site_url = $agent_data['site_url'];
+        $site_url = $agent_data['site'];
         $username = $agent_data['username'];
         $password = $agent_data['password'];
 
@@ -221,9 +225,9 @@ class Watchtower_Manager_Auto_Updater {
 
         if (isset($agent_data['wordpress']['version'])) {
             $agent_storage = new Watchtower_Manager_Agent_Storage();
-            $agent_info = $agent_storage->get_agent_by_url($agent_data['site_url']);
+            $agent_info = $agent_storage->get_agent_by_url($agent_data['site']);
 
-            $info_url = $agent_data['site_url'] . '/wp-json/watchtower-agent/v1/info';
+            $info_url = $agent_data['site'] . '/wp-json/watchtower-agent/v1/info';
             $response = wp_remote_get($info_url, array(
                 'timeout' => 10,
                 'sslverify' => false,

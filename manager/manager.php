@@ -126,7 +126,7 @@ function watchtower_manager_poll_health_callback() {
     error_log('Watchtower Manager: Starting health poll for ' . count($agents) . ' agents');
 
     foreach ($agents as $agent) {
-        $site_url = $agent['site_url'];
+        $site_url = $agent['site'];
 
         $result = $site_storage->fetch_and_save_health($agent);
 
@@ -150,7 +150,7 @@ function watchtower_manager_check_versions_callback() {
     error_log('Watchtower Manager: Starting version check for ' . count($agents) . ' agents');
 
     foreach ($agents as $agent) {
-        $site_url = $agent['site_url'];
+        $site_url = $agent['site'];
 
         $result = $site_storage->check_and_update_agent_version($agent);
 

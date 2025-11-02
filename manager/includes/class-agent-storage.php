@@ -113,7 +113,7 @@ class Watchtower_Manager_Agent_Storage {
      * Add or update agent
      */
     public function save_agent($agent_data) {
-        $site_url = $agent_data['site_url'];
+        $site_url = $agent_data['site'];
         $site_dir = $this->get_site_dir($site_url);
         $info_file = $this->get_info_file_path($site_url);
 
@@ -122,10 +122,10 @@ class Watchtower_Manager_Agent_Storage {
 
         if ($existing_agent) {
             $agent_data = array_merge($existing_agent, $agent_data);
-            $agent_data['updated_at'] = current_time('mysql');
+            $agent_data['updated'] = current_time('mysql');
         } else {
-            $agent_data['registered_at'] = current_time('mysql');
-            $agent_data['updated_at'] = current_time('mysql');
+            $agent_data['registered'] = current_time('mysql');
+            $agent_data['updated'] = current_time('mysql');
         }
 
         if (!file_exists($site_dir)) {
