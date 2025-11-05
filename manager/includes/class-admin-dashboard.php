@@ -10,21 +10,15 @@ if (!defined('ABSPATH')) {
 class Watchtower_Manager_Admin_Dashboard {
 
     /**
-     * Agent storage instance
+     * Storage instance
      */
     private $storage;
-
-    /**
-     * Site storage instance
-     */
-    private $site_storage;
 
     /**
      * Constructor
      */
     public function __construct() {
-        $this->storage = new Watchtower_Manager_Agent_Storage();
-        $this->site_storage = new Watchtower_Manager_Site_Storage();
+        $this->storage = new Watchtower_Manager_Storage();
     }
 
     /**
@@ -57,6 +51,7 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_create_file', array($this, 'ajax_create_file'));
         add_action('wp_ajax_watchtower_manager_get_file_content', array($this, 'ajax_get_file_content'));
         add_action('wp_ajax_watchtower_manager_save_file', array($this, 'ajax_save_file'));
+        add_action('wp_ajax_watchtower_manager_toggle_maintenance', array($this, 'ajax_toggle_maintenance'));
     }
 
     /**
@@ -170,7 +165,7 @@ class Watchtower_Manager_Admin_Dashboard {
         $agents_with_health = array();
 
         foreach ($agents as $agent) {
-            $health_data = $this->site_storage->get_health_data($agent['site']);
+            $health_data = $this->storage->get_health_data($agent['site']);
             $health_status = $this->determine_health_status($health_data);
 
             $agent['health_status'] = $health_status;
@@ -334,9 +329,14 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td data-label="Health">
                                             <?php
                                             $health_status = $agent['health_status'];
+                                            $is_maintenance = isset($agent['mode']) && $agent['mode'] === 'maintenance';
 
-                                            if ($health_status === 'healthy'):
+                                            if ($is_maintenance):
                                             ?>
+                                                <span class="health-badge health-badge-maintenance">
+                                                    <span class="dashicons dashicons-admin-tools"></span> Maintenance
+                                                </span>
+                                            <?php elseif ($health_status === 'healthy'): ?>
                                                 <span class="health-badge health-badge-healthy">
                                                     <span class="dashicons dashicons-yes-alt"></span> Healthy
                                                 </span>
@@ -363,7 +363,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                         <td data-label="Agent"><?php echo esc_html($agent['agent_version']); ?></td>
                                         <td data-label="Scanned">
                                             <?php
-                                            $health_age = $this->site_storage->get_health_data_age($agent['site']);
+                                            $health_age = $this->storage->get_health_data_age($agent['site']);
                                             if ($health_age !== null) {
                                                 echo $health_age < 60 ? 'just now' : human_time_diff(current_time('timestamp') - $health_age, current_time('timestamp')) . ' ago';
                                             } else {
@@ -419,7 +419,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                 'site' => urlencode($agent['site'])
                             ), admin_url('admin.php'));
                             $health_status = $agent['health_status'];
-                            $health_age = $this->site_storage->get_health_data_age($agent['site']);
+                            $health_age = $this->storage->get_health_data_age($agent['site']);
                             ?>
                             <div class="mobile-site-tile site-row" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $health_status; ?>" onclick="window.location.href='<?php echo esc_url($details_url); ?>'">
                                 <div class="mobile-site-header">
@@ -436,7 +436,11 @@ class Watchtower_Manager_Admin_Dashboard {
                                         </a>
                                     </div>
                                     <div class="mobile-site-health">
-                                        <?php if ($health_status === 'healthy'): ?>
+                                        <?php if ($is_maintenance): ?>
+                                            <span class="health-badge health-badge-maintenance">
+                                                <span class="dashicons dashicons-admin-tools"></span> Maintenance
+                                            </span>
+                                        <?php elseif ($health_status === 'healthy'): ?>
                                             <span class="health-badge health-badge-healthy">
                                                 <span class="dashicons dashicons-yes-alt"></span> Healthy
                                             </span>
@@ -594,7 +598,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $result = $this->site_storage->check_and_update_agent_version($agent, true);
+        $result = $this->storage->check_and_update_agent_version($agent, true);
 
         if (!isset($result['checked']) || !$result['checked']) {
             $error = isset($result['error']) ? $result['error'] : 'Failed to check agent version';
@@ -616,7 +620,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $scan_result = $this->site_storage->fetch_and_save_health($agent);
+        $scan_result = $this->storage->fetch_and_save_health($agent);
 
         wp_send_json_success(array(
             'message' => 'Agent updated successfully',
@@ -644,7 +648,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $result = $this->site_storage->fetch_and_save_health($agent);
+        $result = $this->storage->fetch_and_save_health($agent);
 
         if (!$result) {
             wp_send_json_error(array('message' => 'Failed to scan site'));
@@ -808,7 +812,7 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $backups_data = $this->site_storage->get_backups_data($site_url);
+        $backups_data = $this->storage->get_backups_data($site_url);
 
         if (!$backups_data || !isset($backups_data['fetched_at'])) {
             $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
@@ -1688,6 +1692,66 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_send_json_success($data);
     }
 
+    public function ajax_toggle_maintenance() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error('Permission denied');
+        }
+
+        $site_url = isset($_POST['site_url']) ? sanitize_text_field($_POST['site_url']) : '';
+        $enabled = isset($_POST['enabled']) ? filter_var($_POST['enabled'], FILTER_VALIDATE_BOOLEAN) : false;
+
+        if (empty($site_url)) {
+            wp_send_json_error('Missing site URL');
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error('Agent not found');
+            return;
+        }
+
+        $maintenance_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/maintenance');
+
+        $response = wp_remote_post($maintenance_url, array(
+            'timeout' => 10,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array(
+                'enabled' => $enabled
+            ))
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error($response->get_error_message());
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error('Invalid response from agent');
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error($data['error'] ?? 'Failed to toggle maintenance mode');
+            return;
+        }
+
+        $agent['mode'] = $enabled ? 'maintenance' : 'live';
+        $this->storage->save_agent($agent);
+
+        wp_send_json_success($data);
+    }
+
     /**
      * Determine overall health status
      */
@@ -1740,12 +1804,12 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_die('Agent not found');
     }
 
-    $health_data = $this->site_storage->get_health_data($site_url);
-    $health_age = $this->site_storage->get_health_data_age($site_url);
+    $health_data = $this->storage->get_health_data($site_url);
+    $health_age = $this->storage->get_health_data_age($site_url);
 
-    if ($this->site_storage->is_health_data_stale($site_url)) {
-        $this->site_storage->fetch_and_save_health($agent);
-        $health_data = $this->site_storage->get_health_data($site_url);
+    if ($this->storage->is_health_data_stale($site_url)) {
+        $this->storage->fetch_and_save_health($agent);
+        $health_data = $this->storage->get_health_data($site_url);
         $health_age = 0;
     }
 
@@ -1770,11 +1834,19 @@ class Watchtower_Manager_Admin_Dashboard {
             <div id="watchtower-page-content" style="opacity: 0; transition: opacity 0.3s ease;">
                 <div class="watchtower-manager-dashboard">
             <!-- Overall Health Status -->
-            <div class="health-status-card <?php echo $overall_status; ?>">
+            <?php
+            $is_maintenance_mode = isset($agent['mode']) && $agent['mode'] === 'maintenance';
+            $display_status = $is_maintenance_mode ? 'warning' : $overall_status;
+            ?>
+            <div class="health-status-card <?php echo $display_status; ?>">
                 <span class="dashicons <?php
-                    echo $overall_status === 'healthy' ? 'dashicons-yes-alt' :
-                        ($overall_status === 'warning' ? 'dashicons-warning' : 'dashicons-dismiss');
-                ?> health-status-icon <?php echo $overall_status; ?>"></span>
+                    if ($is_maintenance_mode) {
+                        echo 'dashicons-admin-tools';
+                    } else {
+                        echo $overall_status === 'healthy' ? 'dashicons-yes-alt' :
+                            ($overall_status === 'warning' ? 'dashicons-warning' : 'dashicons-dismiss');
+                    }
+                ?> health-status-icon <?php echo $display_status; ?>"></span>
                 <div class="health-status-content">
                     <div class="health-status-info">
                         <div class="health-status-title">
@@ -1782,15 +1854,66 @@ class Watchtower_Manager_Admin_Dashboard {
                             <?php if (isset($agent['name'])): ?>
                                 <div style="font-size: 14px; font-weight: 400; color: #646970;">
                                     <?php echo esc_html($site_url); ?>
+                                    <?php if (isset($agent['agent_version'])): ?>
+                                        - <?php echo esc_html($agent['agent_version']); ?>
+                                    <?php endif; ?>
                                 </div>
                             <?php endif; ?>
                         </div>
-                        <div class="health-status-subtitle <?php echo $overall_status; ?>">
+                        <?php if ($has_health_data): ?>
                             <?php
-                            if ($overall_status === 'healthy') echo 'Site is Healthy';
+                            $has_intermission = false;
+                            $maintenance_enabled = false;
+                            if (isset($health_data['plugins']['active_plugins'])) {
+                                foreach ($health_data['plugins']['active_plugins'] as $plugin) {
+                                    if (isset($plugin['file']) && $plugin['file'] === 'intermission/intermission.php') {
+                                        $has_intermission = true;
+                                        break;
+                                    }
+                                }
+                            }
+                            if ($has_intermission) {
+                                $agent_url = $agent['site'];
+                                $username = $agent['username'];
+                                $password = $agent['password'];
+                                $maintenance_status_url = watchtower_manager_translate_agent_url($agent_url, '/watchtower-agent/v1/maintenance');
+                                $maintenance_status_response = wp_remote_get(
+                                    $maintenance_status_url,
+                                    array(
+                                        'timeout' => 10,
+                                        'headers' => array(
+                                            'Authorization' => 'Basic ' . base64_encode($username . ':' . $password),
+                                        ),
+                                        'sslverify' => false,
+                                    )
+                                );
+                                if (!is_wp_error($maintenance_status_response)) {
+                                    $maintenance_body = json_decode(wp_remote_retrieve_body($maintenance_status_response), true);
+                                    if (isset($maintenance_body['maintenance_enabled'])) {
+                                        $maintenance_enabled = $maintenance_body['maintenance_enabled'];
+                                    }
+                                }
+                            }
+                            ?>
+                            <?php if ($has_intermission): ?>
+                            <div class="intermission-mode-toggle" style="margin-top: 10px; margin-bottom: 15px;">
+                                <input type="checkbox" id="maintenance-mode-toggle" <?php checked($maintenance_enabled); ?> data-site-url="<?php echo esc_attr($site_url); ?>">
+                                <label for="maintenance-mode-toggle" class="intermission-toggle-switch <?php echo $maintenance_enabled ? 'maintenance' : 'live'; ?>">
+                                    <span class="intermission-toggle-slider"></span>
+                                </label>
+                                <span class="intermission-mode-label"><?php echo $maintenance_enabled ? 'Maintenance' : 'Live'; ?></span>
+                            </div>
+                            <?php endif; ?>
+                        <?php endif; ?>
+                        <div class="health-status-subtitle <?php echo $display_status; ?>">
+                            <span class="health-status-text">
+                            <?php
+                            if ($is_maintenance_mode) echo 'Site in Maintenance';
+                            elseif ($overall_status === 'healthy') echo 'Site is Healthy';
                             elseif ($overall_status === 'warning') echo 'Site Needs Attention';
                             else echo 'Site Has Critical Issues';
                             ?>
+                            </span>
                             <?php if ($has_health_data): ?>
                             <button class="health-status-toggle" onclick="toggleHealthDetails(event)" style="margin-left: 10px; background: none; border: none; cursor: pointer; color: inherit; padding: 0; vertical-align: middle;">
                                 <span class="dashicons dashicons-arrow-down-alt2" style="font-size: 16px; width: 16px; height: 16px;"></span>

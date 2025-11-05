@@ -1,14 +1,14 @@
 <?php
 /**
- * Site Storage Class
- * Handles reading and writing site health data to individual site directories
+ * Storage Class
+ * Handles reading and writing agent data and health data to individual site directories
  */
 
 if (!defined('ABSPATH')) {
     exit;
 }
 
-class Watchtower_Manager_Site_Storage {
+class Watchtower_Manager_Storage {
 
     /**
      * Path to sites directory
@@ -64,10 +64,136 @@ class Watchtower_Manager_Site_Storage {
     }
 
     /**
+     * Get info file path for a given site URL
+     */
+    private function get_info_file_path($site_url) {
+        return $this->get_site_dir($site_url) . 'info.json';
+    }
+
+    /**
      * Get health file path for a site
      */
     private function get_health_file_path($site_url) {
         return $this->get_site_dir($site_url) . 'health.json';
+    }
+
+    /**
+     * Get all registered agents
+     */
+    public function get_all_agents() {
+        if (!file_exists($this->sites_dir)) {
+            return array();
+        }
+
+        $agents = array();
+        $site_dirs = glob($this->sites_dir . '*/info.json');
+
+        foreach ($site_dirs as $info_file) {
+            $json = file_get_contents($info_file);
+            $agent = json_decode($json, true);
+
+            if (is_array($agent)) {
+                $agents[] = $agent;
+            }
+        }
+
+        return $agents;
+    }
+
+    /**
+     * Get agent by site URL
+     */
+    public function get_agent_by_url($site_url) {
+        $info_file = $this->get_info_file_path($site_url);
+
+        if (!file_exists($info_file)) {
+            return null;
+        }
+
+        $json = file_get_contents($info_file);
+        $agent = json_decode($json, true);
+
+        return is_array($agent) ? $agent : null;
+    }
+
+    /**
+     * Add or update agent
+     */
+    public function save_agent($agent_data) {
+        $site_url = $agent_data['site'];
+        $site_dir = $this->get_site_dir($site_url);
+        $info_file = $this->get_info_file_path($site_url);
+
+        $existing_agent = $this->get_agent_by_url($site_url);
+        $is_new_registration = !$existing_agent;
+
+        if ($existing_agent) {
+            $agent_data = array_merge($existing_agent, $agent_data);
+            $agent_data['updated'] = current_time('mysql');
+        } else {
+            $agent_data['registered'] = current_time('mysql');
+            $agent_data['updated'] = current_time('mysql');
+        }
+
+        if (!file_exists($site_dir)) {
+            wp_mkdir_p($site_dir);
+        }
+
+        $json = json_encode($agent_data, JSON_PRETTY_PRINT);
+        $result = file_put_contents($info_file, $json);
+
+        if ($result !== false && $is_new_registration) {
+            $this->fetch_and_save_health($agent_data);
+        }
+
+        return $result !== false;
+    }
+
+    /**
+     * Remove agent by site URL
+     */
+    public function remove_agent($site_url) {
+        $site_dir = $this->get_site_dir($site_url);
+
+        if (!file_exists($site_dir)) {
+            return true;
+        }
+
+        $this->delete_directory($site_dir);
+
+        return !file_exists($site_dir);
+    }
+
+    /**
+     * Recursively delete a directory
+     */
+    private function delete_directory($dir) {
+        if (!file_exists($dir)) {
+            return true;
+        }
+
+        if (!is_dir($dir)) {
+            return unlink($dir);
+        }
+
+        foreach (scandir($dir) as $item) {
+            if ($item == '.' || $item == '..') {
+                continue;
+            }
+
+            if (!$this->delete_directory($dir . DIRECTORY_SEPARATOR . $item)) {
+                return false;
+            }
+        }
+
+        return rmdir($dir);
+    }
+
+    /**
+     * Get agent count
+     */
+    public function get_agent_count() {
+        return count($this->get_all_agents());
     }
 
     /**
@@ -107,8 +233,7 @@ class Watchtower_Manager_Site_Storage {
             return null;
         }
 
-        $agent_storage = new Watchtower_Manager_Agent_Storage();
-        $agent = $agent_storage->get_agent_by_url($site_url);
+        $agent = $this->get_agent_by_url($site_url);
 
         if ($agent) {
             $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
@@ -213,8 +338,7 @@ class Watchtower_Manager_Site_Storage {
             return $this->save_health_data($site_url, $health_data);
         }
 
-        $agent_storage = new Watchtower_Manager_Agent_Storage();
-        $current_agent = $agent_storage->get_agent_by_url($site_url);
+        $current_agent = $this->get_agent_by_url($site_url);
 
         $static_data = array();
         $static_keys = array('php', 'wordpress', 'database', 'server', 'plugins', 'theme', 'constants');
@@ -247,7 +371,40 @@ class Watchtower_Manager_Site_Storage {
                 $update_data['agent_version'] = $agent_version;
             }
 
-            $agent_storage->save_agent($update_data);
+            $has_intermission = false;
+            if (isset($static_data['plugins']['active_plugins'])) {
+                foreach ($static_data['plugins']['active_plugins'] as $plugin) {
+                    if (isset($plugin['file']) && $plugin['file'] === 'intermission/intermission.php') {
+                        $has_intermission = true;
+                        break;
+                    }
+                }
+            }
+
+            if ($has_intermission && isset($agent['username']) && isset($agent['password'])) {
+                $maintenance_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/maintenance');
+                $maintenance_response = wp_remote_get(
+                    $maintenance_url,
+                    array(
+                        'timeout' => 10,
+                        'headers' => array(
+                            'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                        ),
+                        'sslverify' => false,
+                    )
+                );
+
+                if (!is_wp_error($maintenance_response)) {
+                    $maintenance_body = json_decode(wp_remote_retrieve_body($maintenance_response), true);
+                    if (isset($maintenance_body['maintenance_enabled'])) {
+                        $update_data['mode'] = $maintenance_body['maintenance_enabled'] ? 'maintenance' : 'live';
+                    }
+                }
+            } else {
+                $update_data['mode'] = 'live';
+            }
+
+            $this->save_agent($update_data);
         }
 
         $dynamic_data = array(
@@ -274,7 +431,7 @@ class Watchtower_Manager_Site_Storage {
                     $info_body = wp_remote_retrieve_body($info_response);
                     $info_data = json_decode($info_body, true);
                     if ($info_data && isset($info_data['version'])) {
-                        $agent_storage->save_agent(array(
+                        $this->save_agent(array(
                             'site' => $site_url,
                             'agent_version' => $info_data['version']
                         ));
@@ -555,9 +712,9 @@ class Watchtower_Manager_Site_Storage {
         $age = $this->get_health_data_age($site_url);
 
         if ($age === null) {
-            return true; // No data = stale
+            return true;
         }
 
-        return $age > 300; // 5 minutes
+        return $age > 300;
     }
 }

@@ -347,6 +347,10 @@
     background: #fcf0d2;
     color: #dba617;
 }
+.watchtower-manager-dashboard .health-badge-maintenance {
+    background: #fcf0d2;
+    color: #dba617;
+}
 .watchtower-manager-dashboard .health-badge-critical {
     background: #fcdddd;
     color: #d63638;
