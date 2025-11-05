@@ -57,7 +57,7 @@
     jQuery(document).ready(function($) {
         $('.watchtower-update-agent-btn').on('click', function() {
             var button = $(this);
-            var siteUrl = button.data('site-url');
+            var siteUrl = button.data('site');
 
             if (!confirm('Are you sure you want to update the agent plugin on this site?')) {
                 return;
@@ -87,7 +87,7 @@
 
         $('.watchtower-toggle-debug-btn').on('click', function() {
             var button = $(this);
-            var siteUrl = button.data('site-url');
+            var siteUrl = button.data('site');
             var debugEnabled = button.data('debug-enabled') === 1;
             var newState = !debugEnabled;
 
@@ -121,7 +121,7 @@
         $('.watchtower-scan-btn').on('click', function(e) {
             e.preventDefault();
             var button = $(this);
-            var siteUrl = button.data('site-url');
+            var siteUrl = button.data('site');
             var originalHtml = button.html();
 
             button.html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Scanning...').prop('disabled', true);
@@ -1716,6 +1716,64 @@
         });
 
         handleTabOverflow();
+
+        $('#maintenance-mode-toggle').on('change', function() {
+            const checkbox = $(this);
+            const isChecked = checkbox.is(':checked');
+            const siteUrl = checkbox.data('site-url');
+            const toggleSwitch = checkbox.siblings('.intermission-toggle-switch');
+            const toggleLabel = checkbox.siblings('.intermission-mode-label');
+
+            toggleSwitch.addClass(isChecked ? 'maintenance' : 'live').removeClass(isChecked ? 'live' : 'maintenance');
+            toggleLabel.text(isChecked ? 'Maintenance' : 'Live');
+
+            $.ajax({
+                url: ajaxurl,
+                type: 'POST',
+                data: {
+                    action: 'watchtower_manager_toggle_maintenance',
+                    site_url: siteUrl,
+                    enabled: isChecked,
+                    nonce: context.nonce
+                },
+                success: function(response) {
+                    console.log('AJAX Response:', response);
+                    if (response.success) {
+                        console.log('Maintenance mode ' + (isChecked ? 'enabled' : 'disabled'));
+
+                        const $healthCard = $('.health-status-card');
+                        const $healthIcon = $('.health-status-icon');
+                        const $healthSubtitle = $('.health-status-subtitle');
+                        const $healthText = $('.health-status-text');
+
+                        if (isChecked) {
+                            $healthCard.removeClass('healthy critical').addClass('warning');
+                            $healthIcon.removeClass('dashicons-yes-alt dashicons-dismiss').addClass('dashicons-admin-tools warning');
+                            $healthSubtitle.removeClass('healthy critical').addClass('warning');
+                            $healthText.text('Site in Maintenance');
+                        } else {
+                            $healthCard.removeClass('warning critical').addClass('healthy');
+                            $healthIcon.removeClass('dashicons-admin-tools dashicons-dismiss warning').addClass('dashicons-yes-alt healthy');
+                            $healthSubtitle.removeClass('warning critical').addClass('healthy');
+                            $healthText.text('Site is Healthy');
+                        }
+                    } else {
+                        console.error('Failed to toggle:', response);
+                        checkbox.prop('checked', !isChecked);
+                        toggleSwitch.removeClass(isChecked ? 'maintenance' : 'live').addClass(isChecked ? 'live' : 'maintenance');
+                        toggleLabel.text(isChecked ? 'Live' : 'Maintenance');
+                        alert('Failed to toggle maintenance mode: ' + (response.data || 'Unknown error'));
+                    }
+                },
+                error: function(xhr, status, error) {
+                    console.error('AJAX Error:', xhr, status, error);
+                    checkbox.prop('checked', !isChecked);
+                    toggleSwitch.removeClass(isChecked ? 'maintenance' : 'live').addClass(isChecked ? 'live' : 'maintenance');
+                    toggleLabel.text(isChecked ? 'Live' : 'Maintenance');
+                    alert('Failed to toggle maintenance mode: ' + error);
+                }
+            });
+        });
 
         setTimeout(function() {
             $('#watchtower-page-loading').fadeOut(300, function() {

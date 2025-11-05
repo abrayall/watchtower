@@ -37,6 +37,9 @@ class Watchtower_Agent_REST_Controller {
         $log_management = new Watchtower_Agent_Log_Management($this->namespace);
         $log_management->register_routes();
 
+        $maintenance_management = new Watchtower_Agent_Maintenance_Management($this->namespace);
+        $maintenance_management->register_routes();
+
         $file_management = new Watchtower_Agent_File_Management();
         $file_management->register_routes();
 

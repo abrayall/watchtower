@@ -46,6 +46,7 @@ require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-user-manage
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-backup-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-update-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-log-management.php';
+require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-maintenance-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-file-management.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/endpoints/class-audit-endpoint.php';
 require_once WATCHTOWER_AGENT_PLUGIN_DIR . 'includes/class-admin-settings.php';
@@ -159,7 +160,7 @@ function watchtower_agent_activate() {
                     error_log('Watchtower Agent: Password: ' . $password);
                     error_log('Watchtower Agent: This password is also stored in transient "watchtower_agent_app_password" for 10 minutes');
 
-                    $manager_storage_file = WP_PLUGIN_DIR . '/remote-manager/includes/class-agent-storage.php';
+                    $manager_storage_file = WP_PLUGIN_DIR . '/watchtower-manager/includes/class-storage.php';
 
                     if (file_exists($manager_storage_file)) {
                         error_log('Watchtower Agent: Manager detected locally, auto-registering...');
@@ -187,13 +188,13 @@ function watchtower_agent_activate() {
  * @return true|string Returns true on success, error message string on failure
  */
 function watchtower_agent_register_with_manager($username, $password) {
-    $manager_storage_file = WP_PLUGIN_DIR . '/watchtower-manager/includes/class-agent-storage.php';
+    $manager_storage_file = WP_PLUGIN_DIR . '/watchtower-manager/includes/class-storage.php';
     $manager_active = is_plugin_active('watchtower-manager/manager.php');
 
     if (file_exists($manager_storage_file) && $manager_active && defined('WATCHTOWER_MANAGER_DATA_DIR')) {
         require_once $manager_storage_file;
 
-        $storage = new Watchtower_Manager_Agent_Storage();
+        $storage = new Watchtower_Manager_Storage();
 
         $agent_data = array(
             'site' => get_site_url(),

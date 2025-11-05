@@ -224,8 +224,8 @@ class Watchtower_Manager_Auto_Updater {
         $agent_version = null;
 
         if (isset($agent_data['wordpress']['version'])) {
-            $agent_storage = new Watchtower_Manager_Agent_Storage();
-            $agent_info = $agent_storage->get_agent_by_url($agent_data['site']);
+            $storage = new Watchtower_Manager_Storage();
+            $agent_info = $storage->get_agent_by_url($agent_data['site']);
 
             $info_url = $agent_data['site'] . '/wp-json/watchtower-agent/v1/info';
             $response = wp_remote_get($info_url, array(

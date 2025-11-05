@@ -15,7 +15,7 @@ class Watchtower_Manager_REST_Controller {
     private $namespace;
 
     /**
-     * Agent storage instance
+     * Storage instance
      */
     private $storage;
 
@@ -24,7 +24,7 @@ class Watchtower_Manager_REST_Controller {
      */
     public function __construct($namespace) {
         $this->namespace = $namespace;
-        $this->storage = new Watchtower_Manager_Agent_Storage();
+        $this->storage = new Watchtower_Manager_Storage();
     }
 
     /**
@@ -114,6 +114,97 @@ class Watchtower_Manager_REST_Controller {
                     'type' => 'string',
                 ),
                 'password' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/backups', array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => array($this, 'get_backups'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/backup', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'start_backup'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+                'type' => array(
+                    'required' => false,
+                    'type' => 'string',
+                    'default' => 'full',
+                    'enum' => array('full', 'database', 'files'),
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/backup/(?P<id>\d+)', array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => array($this, 'get_backup_status'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+                'id' => array(
+                    'required' => true,
+                    'type' => 'integer',
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/backup/(?P<id>\d+)', array(
+            'methods' => WP_REST_Server::DELETABLE,
+            'callback' => array($this, 'delete_backup'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+                'id' => array(
+                    'required' => true,
+                    'type' => 'integer',
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/restore', array(
+            'methods' => WP_REST_Server::CREATABLE,
+            'callback' => array($this, 'start_restore'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
+                    'required' => true,
+                    'type' => 'string',
+                ),
+                'id' => array(
+                    'required' => true,
+                    'type' => 'integer',
+                    'description' => 'Backup timestamp ID',
+                ),
+            ),
+        ));
+
+        register_rest_route($this->namespace, '/restore/status', array(
+            'methods' => WP_REST_Server::READABLE,
+            'callback' => array($this, 'get_restore_status'),
+            'permission_callback' => array($this, 'check_permission'),
+            'args' => array(
+                'site' => array(
                     'required' => true,
                     'type' => 'string',
                 ),
@@ -267,6 +358,258 @@ class Watchtower_Manager_REST_Controller {
                 'error' => 'Failed to update password',
             ), 500);
         }
+    }
+
+    /**
+     * Get backups for an agent
+     */
+    public function get_backups($request) {
+        $site_url = $request->get_param('site');
+
+        $backups_data = $this->storage->get_backups_data($site_url);
+
+        if ($backups_data === null) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'No backup data found',
+            ), 404);
+        }
+
+        return new WP_REST_Response($backups_data, 200);
+    }
+
+    /**
+     * Start backup on agent
+     */
+    public function start_backup($request) {
+        $site_url = $request->get_param('site');
+        $type = $request->get_param('type');
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        $backup_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backup');
+
+        $response = wp_remote_post($backup_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array('type' => $type)),
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+            ), 500);
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+            ), 500);
+        }
+
+        return new WP_REST_Response($data, wp_remote_retrieve_response_code($response));
+    }
+
+    /**
+     * Get backup status from agent
+     */
+    public function get_backup_status($request) {
+        $site_url = $request->get_param('site');
+        $backup_id = $request->get_param('id');
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        $status_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups/' . $backup_id);
+
+        $response = wp_remote_get($status_url, array(
+            'timeout' => 10,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+            ), 500);
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+            ), 500);
+        }
+
+        return new WP_REST_Response($data, wp_remote_retrieve_response_code($response));
+    }
+
+    /**
+     * Delete backup on agent
+     */
+    public function delete_backup($request) {
+        $site_url = $request->get_param('site');
+        $backup_id = $request->get_param('id');
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        $delete_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups/' . $backup_id);
+
+        $response = wp_remote_request($delete_url, array(
+            'method' => 'DELETE',
+            'timeout' => 10,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+            ), 500);
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+            ), 500);
+        }
+
+        return new WP_REST_Response($data, wp_remote_retrieve_response_code($response));
+    }
+
+    /**
+     * Start restore on agent
+     */
+    public function start_restore($request) {
+        $site_url = $request->get_param('site');
+        $backup_id = $request->get_param('id');
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        $restore_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore');
+
+        $response = wp_remote_post($restore_url, array(
+            'timeout' => 600,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+                'Content-Type' => 'application/json',
+            ),
+            'body' => json_encode(array('id' => $backup_id)),
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+            ), 500);
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+            ), 500);
+        }
+
+        return new WP_REST_Response($data, wp_remote_retrieve_response_code($response));
+    }
+
+    /**
+     * Get restore status from agent
+     */
+    public function get_restore_status($request) {
+        $site_url = $request->get_param('site');
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Agent not found',
+            ), 404);
+        }
+
+        $status_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore/status');
+
+        $response = wp_remote_get($status_url, array(
+            'timeout' => 10,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+        ));
+
+        if (is_wp_error($response)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => $response->get_error_message(),
+            ), 500);
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'error' => 'Invalid response from agent',
+            ), 500);
+        }
+
+        return new WP_REST_Response($data, wp_remote_retrieve_response_code($response));
     }
 
     /**
