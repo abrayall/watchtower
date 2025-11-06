@@ -1721,8 +1721,8 @@
             const checkbox = $(this);
             const isChecked = checkbox.is(':checked');
             const siteUrl = checkbox.data('site-url');
-            const toggleSwitch = checkbox.siblings('.intermission-toggle-switch');
-            const toggleLabel = checkbox.siblings('.intermission-mode-label');
+            const toggleSwitch = checkbox.siblings('.maintenance-toggle-switch');
+            const toggleLabel = checkbox.siblings('.maintenance-mode-label');
 
             toggleSwitch.addClass(isChecked ? 'maintenance' : 'live').removeClass(isChecked ? 'live' : 'maintenance');
             toggleLabel.text(isChecked ? 'Maintenance' : 'Live');
