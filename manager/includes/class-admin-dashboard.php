@@ -272,7 +272,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             <span class="dashicons dashicons-admin-site-alt3"></span>
                             <h3>No sites registered yet</h3>
                             <p>Sites will appear here once they are registered with the manager.</p>
-                            <p>Install and activate the <strong>WP Remote Agent</strong> plugin on your WordPress sites to get started.</p>
+                            <p>Install and activate the <strong>Watchtower Agent</strong> plugin on your WordPress sites to get started.</p>
                         </div>
                     <?php else: ?>
                         <table>
@@ -409,7 +409,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             <span class="dashicons dashicons-admin-site-alt3"></span>
                             <h3>No sites registered yet</h3>
                             <p>Sites will appear here once they are registered with the manager.</p>
-                            <p>Install and activate the <strong>WP Remote Agent</strong> plugin on your WordPress sites to get started.</p>
+                            <p>Install and activate the <strong>Watchtower Agent</strong> plugin on your WordPress sites to get started.</p>
                         </div>
                     <?php else: ?>
                         <?php foreach ($agents as $index => $agent): ?>
@@ -1896,12 +1896,12 @@ class Watchtower_Manager_Admin_Dashboard {
                             }
                             ?>
                             <?php if ($has_intermission): ?>
-                            <div class="intermission-mode-toggle" style="margin-top: 10px; margin-bottom: 15px;">
+                            <div class="maintenance-mode-toggle">
                                 <input type="checkbox" id="maintenance-mode-toggle" <?php checked($maintenance_enabled); ?> data-site-url="<?php echo esc_attr($site_url); ?>">
-                                <label for="maintenance-mode-toggle" class="intermission-toggle-switch <?php echo $maintenance_enabled ? 'maintenance' : 'live'; ?>">
-                                    <span class="intermission-toggle-slider"></span>
+                                <label for="maintenance-mode-toggle" class="maintenance-toggle-switch <?php echo $maintenance_enabled ? 'maintenance' : 'live'; ?>">
+                                    <span class="maintenance-toggle-slider"></span>
                                 </label>
-                                <span class="intermission-mode-label"><?php echo $maintenance_enabled ? 'Maintenance' : 'Live'; ?></span>
+                                <span class="maintenance-mode-label"><?php echo $maintenance_enabled ? 'Maintenance' : 'Live'; ?></span>
                             </div>
                             <?php endif; ?>
                         <?php endif; ?>
@@ -1915,7 +1915,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             ?>
                             </span>
                             <?php if ($has_health_data): ?>
-                            <button class="health-status-toggle" onclick="toggleHealthDetails(event)" style="margin-left: 10px; background: none; border: none; cursor: pointer; color: inherit; padding: 0; vertical-align: middle;">
+                            <button class="health-status-toggle" onclick="toggleHealthDetails(event)" style="margin-top: 2px; background: none; border: none; cursor: pointer; color: inherit; padding: 0; vertical-align: middle;">
                                 <span class="dashicons dashicons-arrow-down-alt2" style="font-size: 16px; width: 16px; height: 16px;"></span>
                             </button>
                             <?php endif; ?>

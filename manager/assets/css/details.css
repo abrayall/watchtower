@@ -256,7 +256,7 @@
 .health-status-subtitle {
     font-size: 16px;
     font-weight: 600;
-    margin-bottom: 20px;
+    margin-bottom: 5px;
 }
 .health-status-subtitle.healthy {
     color: #00a32a;
@@ -298,6 +298,7 @@
 }
 .health-status-meta {
     margin-top: 12px;
+    margin-bottom: 12px;
 }
 .health-status-meta table {
     border-collapse: collapse;
@@ -318,7 +319,7 @@
 .health-status-timestamp {
     color: #646970;
     font-size: 12px;
-    margin-top: 10px;
+    margin-top: 0px;
 }
 .health-status-actions-mobile {
     display: none;
@@ -1112,17 +1113,18 @@
     }
 }
 
-.intermission-mode-toggle {
+.maintenance-mode-toggle {
     display: flex;
     align-items: center;
     gap: 12px;
+    margin-bottom: 10px;
 }
 
-.intermission-mode-toggle input[type="checkbox"] {
+.maintenance-mode-toggle input[type="checkbox"] {
     display: none;
 }
 
-.intermission-toggle-switch {
+.maintenance-toggle-switch {
     position: relative;
     display: inline-block;
     width: 50px;
@@ -1133,11 +1135,11 @@
     transition: background-color 0.3s ease;
 }
 
-.intermission-toggle-switch.maintenance {
+.maintenance-toggle-switch.maintenance {
     background-color: #ffb900;
 }
 
-.intermission-toggle-slider {
+.maintenance-toggle-slider {
     position: absolute;
     top: 3px;
     left: 3px;
@@ -1148,11 +1150,11 @@
     transition: transform 0.3s ease;
 }
 
-.intermission-mode-toggle input[type="checkbox"]:checked + .intermission-toggle-switch .intermission-toggle-slider {
+.maintenance-mode-toggle input[type="checkbox"]:checked + .maintenance-toggle-switch .maintenance-toggle-slider {
     transform: translateX(24px);
 }
 
-.intermission-mode-label {
+.maintenance-mode-label {
     font-weight: 600;
     font-size: 16px;
     color: #333;
