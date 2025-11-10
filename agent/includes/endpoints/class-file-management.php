@@ -31,6 +31,12 @@ class Watchtower_Agent_File_Management {
             'permission_callback' => array($this, 'check_permission')
         ));
 
+        register_rest_route('watchtower-agent/v1', '/files/rename', array(
+            'methods' => 'POST',
+            'callback' => array($this, 'rename_file'),
+            'permission_callback' => array($this, 'check_permission')
+        ));
+
         register_rest_route('watchtower-agent/v1', '/files/create-directory', array(
             'methods' => 'POST',
             'callback' => array($this, 'create_directory'),
@@ -257,35 +263,115 @@ class Watchtower_Agent_File_Management {
         if (!file_exists($full_path)) {
             return new WP_REST_Response(array(
                 'success' => false,
-                'message' => 'File does not exist'
+                'message' => 'File or directory does not exist'
             ), 404);
-        }
-
-        if (!is_file($full_path)) {
-            return new WP_REST_Response(array(
-                'success' => false,
-                'message' => 'Path is not a file'
-            ), 400);
         }
 
         if (!is_writable($full_path)) {
             return new WP_REST_Response(array(
                 'success' => false,
-                'message' => 'File is not writable'
+                'message' => 'File or directory is not writable'
             ), 403);
         }
 
-        if (!unlink($full_path)) {
+        if (is_dir($full_path)) {
+            if (!$this->delete_directory_recursive($full_path)) {
+                return new WP_REST_Response(array(
+                    'success' => false,
+                    'message' => 'Failed to delete directory'
+                ), 500);
+            }
+            $message = 'Directory deleted successfully';
+        } else {
+            if (!unlink($full_path)) {
+                return new WP_REST_Response(array(
+                    'success' => false,
+                    'message' => 'Failed to delete file'
+                ), 500);
+            }
+            $message = 'File deleted successfully';
+        }
+
+        return new WP_REST_Response(array(
+            'success' => true,
+            'message' => $message,
+            'path' => str_replace($this->wordpress_root, '/', $full_path)
+        ), 200);
+    }
+
+    private function delete_directory_recursive($dir) {
+        if (!is_dir($dir)) {
+            return false;
+        }
+
+        $items = scandir($dir);
+        foreach ($items as $item) {
+            if ($item === '.' || $item === '..') {
+                continue;
+            }
+
+            $path = $dir . DIRECTORY_SEPARATOR . $item;
+            if (is_dir($path)) {
+                if (!$this->delete_directory_recursive($path)) {
+                    return false;
+                }
+            } else {
+                if (!unlink($path)) {
+                    return false;
+                }
+            }
+        }
+
+        return rmdir($dir);
+    }
+
+    public function rename_file($request) {
+        $old_path = $request->get_param('old_path');
+        $new_path = $request->get_param('new_path');
+
+        if (empty($old_path) || empty($new_path)) {
             return new WP_REST_Response(array(
                 'success' => false,
-                'message' => 'Failed to delete file'
+                'message' => 'Both old_path and new_path parameters are required'
+            ), 400);
+        }
+
+        $full_old_path = $this->sanitize_path($old_path);
+        $full_new_path = $this->sanitize_path($new_path);
+
+        if ($full_old_path === null || $full_new_path === null) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Invalid path - access denied'
+            ), 403);
+        }
+
+        if (!file_exists($full_old_path)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Source file or directory does not exist'
+            ), 404);
+        }
+
+        if (file_exists($full_new_path)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Destination already exists'
+            ), 400);
+        }
+
+        if (!rename($full_old_path, $full_new_path)) {
+            return new WP_REST_Response(array(
+                'success' => false,
+                'message' => 'Failed to rename'
             ), 500);
         }
 
         return new WP_REST_Response(array(
             'success' => true,
-            'message' => 'File deleted successfully',
-            'path' => str_replace($this->wordpress_root, '/', $full_path)
+            'message' => 'Renamed successfully',
+            'old_path' => str_replace($this->wordpress_root, '/', $full_old_path),
+            'new_path' => str_replace($this->wordpress_root, '/', $full_new_path)
         ), 200);
     }
 

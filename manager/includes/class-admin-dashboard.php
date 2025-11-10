@@ -51,6 +51,8 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_create_file', array($this, 'ajax_create_file'));
         add_action('wp_ajax_watchtower_manager_get_file_content', array($this, 'ajax_get_file_content'));
         add_action('wp_ajax_watchtower_manager_save_file', array($this, 'ajax_save_file'));
+        add_action('wp_ajax_watchtower_manager_rename_file', array($this, 'ajax_rename_file'));
+        add_action('wp_ajax_watchtower_manager_delete_file', array($this, 'ajax_delete_file'));
         add_action('wp_ajax_watchtower_manager_toggle_maintenance', array($this, 'ajax_toggle_maintenance'));
     }
 
@@ -1686,6 +1688,120 @@ class Watchtower_Manager_Admin_Dashboard {
 
         if (isset($data['success']) && !$data['success']) {
             wp_send_json_error(array('message' => $data['message'] ?? 'Failed to save file'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_rename_file() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
+        $old_path = isset($_POST['old_path']) ? sanitize_text_field($_POST['old_path']) : '';
+        $new_path = isset($_POST['new_path']) ? sanitize_text_field($_POST['new_path']) : '';
+
+        if (empty($site_url) || empty($old_path) || empty($new_path)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $rename_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/files/rename');
+
+        $response = wp_remote_post($rename_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'old_path' => $old_path,
+                'new_path' => $new_path
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to rename'));
+            return;
+        }
+
+        wp_send_json_success($data);
+    }
+
+    public function ajax_delete_file() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
+        $path = isset($_POST['path']) ? sanitize_text_field($_POST['path']) : '';
+
+        if (empty($site_url) || empty($path)) {
+            wp_send_json_error(array('message' => 'Missing required fields'));
+            return;
+        }
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $delete_url = watchtower_manager_translate_agent_url($agent['site'], '/watchtower-agent/v1/files/delete');
+
+        $response = wp_remote_post($delete_url, array(
+            'timeout' => 30,
+            'sslverify' => false,
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'body' => array(
+                'path' => $path
+            )
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if (!$data) {
+            wp_send_json_error(array('message' => 'Invalid response from agent'));
+            return;
+        }
+
+        if (isset($data['success']) && !$data['success']) {
+            wp_send_json_error(array('message' => $data['message'] ?? 'Failed to delete'));
             return;
         }
 

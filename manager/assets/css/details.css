@@ -8,6 +8,156 @@
         100% { transform: rotate(360deg); }
     }
 
+@keyframes fadeIn {
+    from { opacity: 0; }
+    to { opacity: 1; }
+}
+
+@keyframes slideIn {
+    from { transform: translateY(-20px); opacity: 0; }
+    to { transform: translateY(0); opacity: 1; }
+}
+
+.watchtower-dialog-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.5);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 100000;
+    animation: fadeIn 0.2s ease-out;
+}
+
+.watchtower-dialog {
+    background: #fff;
+    border-radius: 8px;
+    box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
+    min-width: 320px;
+    max-width: 500px;
+    animation: slideIn 0.2s ease-out;
+}
+
+.watchtower-dialog-header {
+    padding: 20px 24px;
+    border-bottom: 1px solid #dcdcde;
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.watchtower-dialog-icon {
+    font-size: 24px;
+    width: 24px;
+    height: 24px;
+    flex-shrink: 0;
+}
+
+.watchtower-dialog-icon.alert {
+    color: #d63638;
+}
+
+.watchtower-dialog-icon.confirm {
+    color: #dba617;
+}
+
+.watchtower-dialog-icon.prompt {
+    color: #2271b1;
+}
+
+.watchtower-dialog-title {
+    font-size: 16px;
+    font-weight: 600;
+    color: #1d2327;
+    margin: 0;
+}
+
+.watchtower-dialog-body {
+    padding: 20px 24px;
+    color: #1d2327;
+    line-height: 1.6;
+    font-size: 15px;
+    font-weight: 600;
+}
+
+.watchtower-dialog-input {
+    width: 100%;
+    padding: 8px 12px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 14px;
+    margin-top: 12px;
+    box-sizing: border-box;
+}
+
+.watchtower-dialog-input:focus {
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+
+.watchtower-dialog-footer {
+    padding: 16px 24px;
+    border-top: 1px solid #dcdcde;
+    display: flex;
+    gap: 10px;
+    justify-content: flex-end;
+}
+
+.watchtower-dialog-button {
+    padding: 6px 16px;
+    border-radius: 4px;
+    font-size: 13px;
+    font-weight: 500;
+    cursor: pointer;
+    border: 1px solid;
+    transition: all 0.15s ease;
+}
+
+.watchtower-dialog-button.primary {
+    background: #2271b1;
+    color: #fff;
+    border-color: #2271b1;
+}
+
+.watchtower-dialog-button.primary:hover {
+    background: #135e96;
+    border-color: #135e96;
+}
+
+.watchtower-dialog-button.secondary {
+    background: #f6f7f7;
+    color: #2c3338;
+    border-color: #8c8f94;
+}
+
+.watchtower-dialog-button.secondary:hover {
+    background: #e5e5e5;
+    border-color: #646970;
+}
+
+.watchtower-dialog-button.danger {
+    background: #d63638;
+    color: #fff;
+    border-color: #d63638;
+}
+
+.watchtower-dialog-button.danger:hover {
+    background: #b91c1c;
+    border-color: #b91c1c;
+}
+
+@media (max-width: 480px) {
+    .watchtower-dialog {
+        min-width: 280px;
+        max-width: 90%;
+        margin: 20px;
+    }
+}
+
     .watchtower-spinner {
         display: inline-block;
         width: 32px;

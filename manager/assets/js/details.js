@@ -1,3 +1,142 @@
+    function showAlert(message) {
+        return new Promise(function(resolve) {
+            var overlay = jQuery('<div class="watchtower-dialog-overlay"></div>');
+            var dialog = jQuery('<div class="watchtower-dialog"></div>');
+            var body = jQuery('<div class="watchtower-dialog-body"></div>').text(message);
+            var footer = jQuery('<div class="watchtower-dialog-footer"></div>');
+            var okButton = jQuery('<button class="watchtower-dialog-button primary">OK</button>');
+
+            footer.append(okButton);
+            dialog.append(body).append(footer);
+            overlay.append(dialog);
+
+            okButton.on('click', function() {
+                overlay.remove();
+                resolve();
+            });
+
+            overlay.on('click', function(e) {
+                if (jQuery(e.target).hasClass('watchtower-dialog-overlay')) {
+                    overlay.remove();
+                    resolve();
+                }
+            });
+
+            jQuery(document).on('keydown.watchtower-dialog', function(e) {
+                if (e.key === 'Escape' || e.key === 'Enter') {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve();
+                }
+            });
+
+            jQuery('body').append(overlay);
+            okButton.focus();
+        });
+    }
+
+    function showConfirm(message) {
+        return new Promise(function(resolve) {
+            var overlay = jQuery('<div class="watchtower-dialog-overlay"></div>');
+            var dialog = jQuery('<div class="watchtower-dialog"></div>');
+            var body = jQuery('<div class="watchtower-dialog-body"></div>').html(message.replace(/\n/g, '<br>'));
+            var footer = jQuery('<div class="watchtower-dialog-footer"></div>');
+            var cancelButton = jQuery('<button class="watchtower-dialog-button secondary">Cancel</button>');
+            var confirmButton = jQuery('<button class="watchtower-dialog-button primary">OK</button>');
+
+            footer.append(confirmButton).append(cancelButton);
+            dialog.append(body).append(footer);
+            overlay.append(dialog);
+
+            confirmButton.on('click', function() {
+                jQuery(document).off('keydown.watchtower-dialog');
+                overlay.remove();
+                resolve(true);
+            });
+
+            cancelButton.on('click', function() {
+                jQuery(document).off('keydown.watchtower-dialog');
+                overlay.remove();
+                resolve(false);
+            });
+
+            overlay.on('click', function(e) {
+                if (jQuery(e.target).hasClass('watchtower-dialog-overlay')) {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(false);
+                }
+            });
+
+            jQuery(document).on('keydown.watchtower-dialog', function(e) {
+                if (e.key === 'Escape') {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(false);
+                } else if (e.key === 'Enter') {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(true);
+                }
+            });
+
+            jQuery('body').append(overlay);
+            confirmButton.focus();
+        });
+    }
+
+    function showPrompt(message, defaultValue) {
+        return new Promise(function(resolve) {
+            var overlay = jQuery('<div class="watchtower-dialog-overlay"></div>');
+            var dialog = jQuery('<div class="watchtower-dialog"></div>');
+            var body = jQuery('<div class="watchtower-dialog-body"></div>').text(message);
+            var input = jQuery('<input type="text" class="watchtower-dialog-input">').val(defaultValue || '');
+            body.append(input);
+            var footer = jQuery('<div class="watchtower-dialog-footer"></div>');
+            var cancelButton = jQuery('<button class="watchtower-dialog-button secondary">Cancel</button>');
+            var okButton = jQuery('<button class="watchtower-dialog-button primary">OK</button>');
+
+            footer.append(okButton).append(cancelButton);
+            dialog.append(body).append(footer);
+            overlay.append(dialog);
+
+            okButton.on('click', function() {
+                jQuery(document).off('keydown.watchtower-dialog');
+                overlay.remove();
+                resolve(input.val());
+            });
+
+            cancelButton.on('click', function() {
+                jQuery(document).off('keydown.watchtower-dialog');
+                overlay.remove();
+                resolve(null);
+            });
+
+            overlay.on('click', function(e) {
+                if (jQuery(e.target).hasClass('watchtower-dialog-overlay')) {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(null);
+                }
+            });
+
+            jQuery(document).on('keydown.watchtower-dialog', function(e) {
+                if (e.key === 'Escape') {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(null);
+                } else if (e.key === 'Enter') {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(input.val());
+                }
+            });
+
+            jQuery('body').append(overlay);
+            input.focus().select();
+        });
+    }
+
     function toggleHealthDetails(event) {
         event.preventDefault();
         var meta = document.querySelector('.health-status-meta');
@@ -59,29 +198,33 @@
             var button = $(this);
             var siteUrl = button.data('site');
 
-            if (!confirm('Are you sure you want to update the agent plugin on this site?')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Updating...');
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_update_agent',
-                site: siteUrl,
-                nonce: context.nonce
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Update Successful!').css('color', '#00a32a');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    alert('Update failed: ' + (response.data.message || 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+            showConfirm('Are you sure you want to update the agent plugin on this site?').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                alert('Update request failed. Please try again.');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+
+                button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Updating...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_update_agent',
+                    site: siteUrl,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Update Successful!').css('color', '#00a32a');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        showAlert('Update failed: ' + (response.data.message || 'Unknown error')).then(function() {
+                            button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Update request failed. Please try again.').then(function() {
+                        button.prop('disabled', false).html('<span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Remote Agent');
+                    });
+                });
             });
         });
 
@@ -91,30 +234,34 @@
             var debugEnabled = button.data('debug-enabled') === 1;
             var newState = !debugEnabled;
 
-            if (!confirm('Are you sure you want to ' + (newState ? 'enable' : 'disable') + ' debug mode on this site?')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_toggle_debug',
-                site: siteUrl,
-                enabled: newState,
-                nonce: context.nonce
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> ' + (newState ? 'Debug Enabled!' : 'Debug Disabled!')).css('color', '#00a32a');
-                    setTimeout(function() {
-                        location.reload();
-                    }, 2000);
-                } else {
-                    alert('Failed to toggle debug mode: ' + (response.data.message || 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
+            showConfirm('Are you sure you want to ' + (newState ? 'enable' : 'disable') + ' debug mode on this site?').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                alert('Request failed. Please try again.');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
+
+                button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> ' + (newState ? 'Enabling' : 'Disabling') + '...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_toggle_debug',
+                    site: siteUrl,
+                    enabled: newState,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> ' + (newState ? 'Debug Enabled!' : 'Debug Disabled!')).css('color', '#00a32a');
+                        setTimeout(function() {
+                            location.reload();
+                        }, 2000);
+                    } else {
+                        showAlert('Failed to toggle debug mode: ' + (response.data.message || 'Unknown error')).then(function() {
+                            button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Request failed. Please try again.').then(function() {
+                        button.prop('disabled', false).html('<span class="dashicons dashicons-' + (debugEnabled ? 'no' : 'yes') + '" style="margin-top: 3px;"></span> ' + (debugEnabled ? 'Disable' : 'Enable') + ' Debug');
+                    });
+                });
             });
         });
 
@@ -137,12 +284,14 @@
                         location.reload();
                     }, 500);
                 } else {
-                    alert('Scan failed: ' + response.data.message);
-                    button.html(originalHtml).prop('disabled', false);
+                    showAlert('Scan failed: ' + response.data.message).then(function() {
+                        button.html(originalHtml).prop('disabled', false);
+                    });
                 }
             }).fail(function() {
-                alert('Scan request failed. Please try again.');
-                button.html(originalHtml).prop('disabled', false);
+                showAlert('Scan request failed. Please try again.').then(function() {
+                    button.html(originalHtml).prop('disabled', false);
+                });
             });
         });
 
@@ -293,31 +442,35 @@
         $('#create-backup-btn').on('click', function() {
             var button = $(this);
 
-            if (!confirm('Create a new backup? This may take several minutes.')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Creating...');
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_create_backup',
-                site: context.siteUrl,
-                nonce: context.nonce
-            }, function(response) {
-                if (response.success) {
-                    button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
-                    setTimeout(function() {
-                        button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now').css('color', '');
-                        $('#backups-table').data('loaded', false);
-                        loadBackups();
-                    }, 2000);
-                } else {
-                    alert('Failed to create backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+            showConfirm('Create a new backup? This may take several minutes.').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                alert('Network error while creating backup');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+
+                button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Creating...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_create_backup',
+                    site: context.siteUrl,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
+                        setTimeout(function() {
+                            button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now').css('color', '');
+                            $('#backups-table').data('loaded', false);
+                            loadBackups();
+                        }, 2000);
+                    } else {
+                        showAlert('Failed to create backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
+                            button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Network error while creating backup').then(function() {
+                        button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
+                    });
+                });
             });
         });
 
@@ -331,31 +484,33 @@
             var backupId = button.data('backup-id');
             var backupDate = button.data('backup-date');
 
-            if (!confirm('Restore backup from ' + backupDate + '?\n\nWARNING: This will overwrite your current site data. The site may be temporarily unavailable during restore.')) {
-                return;
-            }
-
-            $('#restore-progress-modal').css('display', 'flex');
-            $('#restore-progress-message').text('Starting restore...');
-            $('#restore-progress-bar').css('width', '0%');
-            $('#restore-progress-percent').text('0%');
-            $('#restore-progress-close').hide();
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_restore_backup',
-                site: context.siteUrl,
-                backup_id: backupId,
-                nonce: context.nonce
-            }, function(response) {
-                if (response.success) {
-                    pollRestoreProgress();
-                } else {
-                    $('#restore-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
-                    $('#restore-progress-close').show();
+            showConfirm('Restore backup from ' + backupDate + '?\n\nWARNING: This will overwrite your current site data. The site may be temporarily unavailable during restore.').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                $('#restore-progress-message').html('<span style="color: #d63638;">Network error while starting restore</span>');
-                $('#restore-progress-close').show();
+
+                $('#restore-progress-modal').css('display', 'flex');
+                $('#restore-progress-message').text('Starting restore...');
+                $('#restore-progress-bar').css('width', '0%');
+                $('#restore-progress-percent').text('0%');
+                $('#restore-progress-close').hide();
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_restore_backup',
+                    site: context.siteUrl,
+                    backup_id: backupId,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        pollRestoreProgress();
+                    } else {
+                        $('#restore-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
+                        $('#restore-progress-close').show();
+                    }
+                }).fail(function() {
+                    $('#restore-progress-message').html('<span style="color: #d63638;">Network error while starting restore</span>');
+                    $('#restore-progress-close').show();
+                });
             });
         });
 
@@ -405,33 +560,37 @@
             var backupId = button.data('backup-id');
             var backupDate = button.data('backup-date');
 
-            if (!confirm('Delete backup from ' + backupDate + '? This cannot be undone.')) {
-                return;
-            }
-
-            button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Deleting...');
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_delete_backup',
-                site: context.siteUrl,
-                backup_id: backupId,
-                nonce: context.nonce
-            }, function(response) {
-                if (response.success) {
-                    button.closest('tr').fadeOut(300, function() {
-                        $(this).remove();
-                        if ($('#backups-table-body tr').length === 0) {
-                            $('#backups-container').hide();
-                            $('#backups-empty').show();
-                        }
-                    });
-                } else {
-                    alert('Failed to delete backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
-                    button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+            showConfirm('Delete backup from ' + backupDate + '? This cannot be undone.').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                alert('Network error while deleting backup');
-                button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+
+                button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Deleting...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_delete_backup',
+                    site: context.siteUrl,
+                    backup_id: backupId,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        button.closest('tr').fadeOut(300, function() {
+                            $(this).remove();
+                            if ($('#backups-table-body tr').length === 0) {
+                                $('#backups-container').hide();
+                                $('#backups-empty').show();
+                            }
+                        });
+                    } else {
+                        showAlert('Failed to delete backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
+                            button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Network error while deleting backup').then(function() {
+                        button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+                    });
+                });
             });
         });
 
@@ -981,7 +1140,7 @@
 
             if (mode === 'create') {
                 if (!username || !email || !password) {
-                    alert('Please fill in all required fields (Username, Email, Password)');
+                    showAlert('Please fill in all required fields (Username, Email, Password)');
                     return;
                 }
 
@@ -1002,16 +1161,16 @@
                         $('#create-user-modal').hide();
                         loadUsers();
                     } else {
-                        alert('Failed to create user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                        showAlert('Failed to create user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
                     }
                     $('#confirm-create-user-btn').prop('disabled', false).text('Create User');
                 }).fail(function() {
-                    alert('Network error occurred');
+                    showAlert('Network error occurred');
                     $('#confirm-create-user-btn').prop('disabled', false).text('Create User');
                 });
             } else {
                 if (!email) {
-                    alert('Email cannot be empty');
+                    showAlert('Email cannot be empty');
                     return;
                 }
 
@@ -1035,14 +1194,15 @@
                 $.post(context.ajaxurl, updateData, function(response) {
                     if (response.success) {
                         $('#create-user-modal').hide();
-                        alert('User updated successfully');
-                        loadUsers();
+                        showAlert('User updated successfully').then(function() {
+                            loadUsers();
+                        });
                     } else {
-                        alert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                        showAlert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
                     }
                     $('#confirm-create-user-btn').prop('disabled', false).text('Update');
                 }).fail(function() {
-                    alert('Network error occurred');
+                    showAlert('Network error occurred');
                     $('#confirm-create-user-btn').prop('disabled', false).text('Update');
                 });
             }
@@ -1143,7 +1303,7 @@
             var row = $('#users-table-body tr[data-user-id="' + userId + '"]').first();
 
             if (row.length === 0) {
-                alert('Error: Could not find user row');
+                showAlert('Error: Could not find user row');
                 return;
             }
 
@@ -1153,7 +1313,7 @@
             var role = row.find('.user-role-edit').val();
 
             if (!email) {
-                alert('Email cannot be empty');
+                showAlert('Email cannot be empty');
                 return;
             }
 
@@ -1170,14 +1330,18 @@
                 role: role
             }, function(response) {
                 if (response.success) {
-                    alert('User updated successfully');
+                    showAlert('User updated successfully').then(function() {
+                        loadUsers();
+                    });
                 } else {
-                    alert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    showAlert('Failed to update user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
+                        loadUsers();
+                    });
                 }
-                loadUsers();
             }).fail(function() {
-                alert('Network error occurred');
-                loadUsers();
+                showAlert('Network error occurred').then(function() {
+                    loadUsers();
+                });
             });
         });
 
@@ -1188,25 +1352,31 @@
 
             $('.edit-dropdown-menu').hide();
 
-            if (!confirm('Send password reset email to ' + userEmail + '?')) {
-                return;
-            }
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_reset_password',
-                site: context.siteUrl,
-                nonce: context.nonce,
-                user_id: userId
-            }, function(response) {
-                if (response.success) {
-                    alert('Password reset email sent successfully');
-                } else {
-                    alert('Failed to send password reset: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+            showConfirm('Send password reset email to ' + userEmail + '?').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-                loadUsers();
-            }).fail(function() {
-                alert('Network error occurred');
-                loadUsers();
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_reset_password',
+                    site: context.siteUrl,
+                    nonce: context.nonce,
+                    user_id: userId
+                }, function(response) {
+                    if (response.success) {
+                        showAlert('Password reset email sent successfully').then(function() {
+                            loadUsers();
+                        });
+                    } else {
+                        showAlert('Failed to send password reset: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
+                            loadUsers();
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Network error occurred').then(function() {
+                        loadUsers();
+                    });
+                });
             });
         });
 
@@ -1237,27 +1407,31 @@
             var userId = $(this).data('user-id');
             var username = $(this).data('username');
 
-            if (!confirm('Are you sure you want to delete user "' + username + '"? This action cannot be undone.')) {
-                return;
-            }
-
-            $(this).prop('disabled', true).text('Deleting...');
-
-            $.post(context.ajaxurl, {
-                action: 'watchtower_manager_delete_user',
-                site: context.siteUrl,
-                nonce: context.nonce,
-                user_id: userId
-            }, function(response) {
-                if (response.success) {
-                    loadUsers();
-                } else {
-                    alert('Failed to delete user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
-                    loadUsers();
+            showConfirm('Are you sure you want to delete user "' + username + '"? This action cannot be undone.').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
                 }
-            }).fail(function() {
-                alert('Network error occurred');
-                loadUsers();
+
+                $(this).prop('disabled', true).text('Deleting...');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_delete_user',
+                    site: context.siteUrl,
+                    nonce: context.nonce,
+                    user_id: userId
+                }, function(response) {
+                    if (response.success) {
+                        loadUsers();
+                    } else {
+                        showAlert('Failed to delete user: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
+                            loadUsers();
+                        });
+                    }
+                }).fail(function() {
+                    showAlert('Network error occurred').then(function() {
+                        loadUsers();
+                    });
+                });
             });
         });
 
@@ -1319,11 +1493,11 @@
 
         function showCreateDialog(type) {
             var typeName = type === 'directory' ? 'Directory' : 'File';
-            var name = prompt('Enter ' + typeName.toLowerCase() + ' name:');
-
-            if (name && name.trim() !== '') {
-                createFileOrDirectory(type, name.trim());
-            }
+            showPrompt('Enter ' + typeName.toLowerCase() + ' name:', '').then(function(name) {
+                if (name && name.trim() !== '') {
+                    createFileOrDirectory(type, name.trim());
+                }
+            });
         }
 
         function createFileOrDirectory(type, name) {
@@ -1341,12 +1515,86 @@
                 if (response.success) {
                     loadFiles(currentFilePath);
                 } else {
-                    alert('Failed to create ' + type + ': ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    showAlert('Failed to create ' + type + ': ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
                 }
             }).fail(function() {
-                alert('Network error occurred while creating ' + type);
+                showAlert('Network error occurred while creating ' + type);
             });
         }
+
+        $(document).on('click', '.rename-file-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var row = $(this).closest('tr');
+            var filePath = row.data('file-path');
+            var fileName = row.data('file-name');
+
+            if (!filePath) {
+                showAlert('Could not determine file path');
+                return;
+            }
+
+            showPrompt('Enter new name:', fileName).then(function(newName) {
+                if (!newName || newName.trim() === '' || newName === fileName) {
+                    return;
+                }
+
+                var pathParts = filePath.split('/');
+                pathParts[pathParts.length - 1] = newName.trim();
+                var newPath = pathParts.join('/');
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_rename_file',
+                    site: context.siteUrl,
+                    old_path: filePath,
+                    new_path: newPath,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        loadFiles(currentFilePath);
+                    } else {
+                        showAlert('Failed to rename: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    }
+                }).fail(function() {
+                    showAlert('Network error occurred while renaming');
+                });
+            });
+        });
+
+        $(document).on('click', '.delete-file-btn', function(e) {
+            e.preventDefault();
+            e.stopPropagation();
+            var row = $(this).closest('tr');
+            var filePath = row.data('file-path');
+            var fileName = row.data('file-name');
+            var fileType = row.data('file-type');
+
+            if (!filePath) {
+                showAlert('Could not determine file path');
+                return;
+            }
+
+            showConfirm('Delete ' + fileType.toLowerCase() + ' "' + fileName + '"?\n\nThis action cannot be undone.').then(function(confirmed) {
+                if (!confirmed) {
+                    return;
+                }
+
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_delete_file',
+                    site: context.siteUrl,
+                    path: filePath,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success) {
+                        loadFiles(currentFilePath);
+                    } else {
+                        showAlert('Failed to delete: ' + (response.data && response.data.message ? response.data.message : 'Unknown error'));
+                    }
+                }).fail(function() {
+                    showAlert('Network error occurred while deleting');
+                });
+            });
+        });
 
         function loadFiles(path) {
             currentFilePath = path || '/';
@@ -1611,6 +1859,9 @@
         function createFileTableRow(item) {
             var isDirectory = item.type === 'directory';
             var $row = $('<tr class="file-tree-row"></tr>');
+            $row.data('file-path', item.path);
+            $row.data('file-name', item.name);
+            $row.data('file-type', isDirectory ? 'Directory' : 'File');
 
             var $nameCell = $('<td></td>');
             var $nameContent = $('<div class="file-tree-name-cell"></div>');
@@ -1762,7 +2013,7 @@
                         checkbox.prop('checked', !isChecked);
                         toggleSwitch.removeClass(isChecked ? 'maintenance' : 'live').addClass(isChecked ? 'live' : 'maintenance');
                         toggleLabel.text(isChecked ? 'Live' : 'Maintenance');
-                        alert('Failed to toggle maintenance mode: ' + (response.data || 'Unknown error'));
+                        showAlert('Failed to toggle maintenance mode: ' + (response.data || 'Unknown error'));
                     }
                 },
                 error: function(xhr, status, error) {
@@ -1770,7 +2021,7 @@
                     checkbox.prop('checked', !isChecked);
                     toggleSwitch.removeClass(isChecked ? 'maintenance' : 'live').addClass(isChecked ? 'live' : 'maintenance');
                     toggleLabel.text(isChecked ? 'Live' : 'Maintenance');
-                    alert('Failed to toggle maintenance mode: ' + error);
+                    showAlert('Failed to toggle maintenance mode: ' + error);
                 }
             });
         });

@@ -1,5 +1,92 @@
         var currentFilter = null;
 
+        function showAlert(message) {
+            return new Promise(function(resolve) {
+                var overlay = jQuery('<div class="watchtower-dialog-overlay"></div>');
+                var dialog = jQuery('<div class="watchtower-dialog"></div>');
+                var body = jQuery('<div class="watchtower-dialog-body"></div>').text(message);
+                var footer = jQuery('<div class="watchtower-dialog-footer"></div>');
+                var okButton = jQuery('<button class="watchtower-dialog-button primary">OK</button>');
+
+                footer.append(okButton);
+                dialog.append(body).append(footer);
+                overlay.append(dialog);
+
+                okButton.on('click', function() {
+                    overlay.remove();
+                    resolve();
+                });
+
+                overlay.on('click', function(e) {
+                    if (jQuery(e.target).hasClass('watchtower-dialog-overlay')) {
+                        overlay.remove();
+                        resolve();
+                    }
+                });
+
+                jQuery(document).on('keydown.watchtower-dialog', function(e) {
+                    if (e.key === 'Escape' || e.key === 'Enter') {
+                        jQuery(document).off('keydown.watchtower-dialog');
+                        overlay.remove();
+                        resolve();
+                    }
+                });
+
+                jQuery('body').append(overlay);
+                okButton.focus();
+            });
+        }
+
+        function showConfirm(message) {
+            return new Promise(function(resolve) {
+                var overlay = jQuery('<div class="watchtower-dialog-overlay"></div>');
+                var dialog = jQuery('<div class="watchtower-dialog"></div>');
+                var body = jQuery('<div class="watchtower-dialog-body"></div>').html(message.replace(/\n/g, '<br>'));
+                var footer = jQuery('<div class="watchtower-dialog-footer"></div>');
+                var cancelButton = jQuery('<button class="watchtower-dialog-button secondary">Cancel</button>');
+                var confirmButton = jQuery('<button class="watchtower-dialog-button primary">OK</button>');
+
+                footer.append(confirmButton).append(cancelButton);
+                dialog.append(body).append(footer);
+                overlay.append(dialog);
+
+                confirmButton.on('click', function() {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(true);
+                });
+
+                cancelButton.on('click', function() {
+                    jQuery(document).off('keydown.watchtower-dialog');
+                    overlay.remove();
+                    resolve(false);
+                });
+
+                overlay.on('click', function(e) {
+                    if (jQuery(e.target).hasClass('watchtower-dialog-overlay')) {
+                        jQuery(document).off('keydown.watchtower-dialog');
+                        overlay.remove();
+                        resolve(false);
+                    }
+                });
+
+                jQuery(document).on('keydown.watchtower-dialog', function(e) {
+                    if (e.key === 'Escape') {
+                        jQuery(document).off('keydown.watchtower-dialog');
+                        overlay.remove();
+                        resolve(false);
+                    } else if (e.key === 'Enter') {
+                        jQuery(document).off('keydown.watchtower-dialog');
+                        overlay.remove();
+                        resolve(true);
+                    }
+                });
+
+                jQuery('body').append(overlay);
+                confirmButton.focus();
+            });
+        }
+
         function filterSites(filterType) {
             var $ = jQuery;
 
@@ -76,8 +163,9 @@
                             location.reload();
                         }, 500);
                     } else {
-                        alert('Scan failed: ' + response.data.message);
-                        button.text(originalText).prop('disabled', false);
+                        showAlert('Scan failed: ' + response.data.message).then(function() {
+                            button.text(originalText).prop('disabled', false);
+                        });
                     }
                 });
             });
@@ -87,28 +175,31 @@
                 var button = $(this);
                 var siteUrl = button.data('site');
 
-                if (!confirm('Are you sure you want to remove this site from the manager?')) {
-                    return;
-                }
-
-                button.text('Removing...').prop('disabled', true);
-
-                $.post(context.ajaxurl, {
-                    action: 'watchtower_manager_remove_agent',
-                    site: siteUrl,
-                    nonce: context.nonce
-                }, function(response) {
-                    if (response.success) {
-                        button.closest('tr').fadeOut(function() {
-                            $(this).remove();
-                            if ($('.sites-table tbody tr').length === 0) {
-                                location.reload();
-                            }
-                        });
-                    } else {
-                        alert('Failed to remove site: ' + response.data.message);
-                        button.text('Remove').prop('disabled', false);
+                showConfirm('Are you sure you want to remove this site from the manager?').then(function(confirmed) {
+                    if (!confirmed) {
+                        return;
                     }
+
+                    button.text('Removing...').prop('disabled', true);
+
+                    $.post(context.ajaxurl, {
+                        action: 'watchtower_manager_remove_agent',
+                        site: siteUrl,
+                        nonce: context.nonce
+                    }, function(response) {
+                        if (response.success) {
+                            button.closest('tr').fadeOut(function() {
+                                $(this).remove();
+                                if ($('.sites-table tbody tr').length === 0) {
+                                    location.reload();
+                                }
+                            });
+                        } else {
+                            showAlert('Failed to remove site: ' + response.data.message).then(function() {
+                                button.text('Remove').prop('disabled', false);
+                            });
+                        }
+                    });
                 });
             });
 
