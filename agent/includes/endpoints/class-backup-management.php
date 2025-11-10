@@ -101,8 +101,6 @@ class Watchtower_Agent_Backup_Management {
             ), 400);
         }
 
-        global $updraftplus;
-
         $type = $request->get_param('type');
 
         $backup_files = true;
@@ -114,44 +112,68 @@ class Watchtower_Agent_Backup_Management {
             $backup_database = false;
         }
 
-        try {
-            $result = $updraftplus->boot_backup($backup_files, $backup_database);
+        $backup_id = time();
+        $nonce = substr(md5(time().rand()), 20);
 
-            if ($result) {
-                $backup_id = $updraftplus->backup_time;
-                $nonce = $updraftplus->file_nonce;
+        set_transient('watchtower_backup_' . $backup_id, array(
+            'status' => 'running',
+            'percent_complete' => 5,
+            'type' => $type,
+            'nonce' => $nonce,
+            'started_at' => current_time('mysql'),
+        ), 3600);
 
-                set_transient('watchtower_backup_' . $backup_id, array(
-                    'status' => 'running',
-                    'percent_complete' => 5,
-                    'type' => $type,
-                    'nonce' => $nonce,
-                    'started_at' => current_time('mysql'),
-                ), 3600); // Keep for 1 hour
+        wp_schedule_single_event(time() + 300, 'watchtower_agent_prune_backups');
 
-                wp_schedule_single_event(time() + 300, 'watchtower_agent_prune_backups');
+        $response_data = array(
+            'success' => true,
+            'message' => 'Backup started successfully',
+            'id' => $backup_id,
+            'nonce' => $nonce,
+            'type' => $type,
+            'backup_files' => $backup_files,
+            'backup_database' => $backup_database,
+        );
 
-                return new WP_REST_Response(array(
-                    'success' => true,
-                    'message' => 'Backup started successfully',
-                    'id' => $backup_id,
-                    'nonce' => $nonce,
-                    'type' => $type,
-                    'backup_files' => $backup_files,
-                    'backup_database' => $backup_database,
-                ), 200);
-            } else {
-                return new WP_REST_Response(array(
-                    'success' => false,
-                    'error' => 'Failed to start backup',
-                ), 400);
-            }
-        } catch (Exception $e) {
-            return new WP_REST_Response(array(
-                'success' => false,
-                'error' => $e->getMessage(),
-            ), 500);
+        $json = json_encode($response_data);
+
+        header('Content-Length: ' . (4 + strlen($json)));
+        header('Connection: close');
+        header('Content-Type: application/json');
+        if (function_exists('session_id') && session_id()) {
+            session_write_close();
         }
+        echo "\r\n\r\n";
+        echo $json;
+
+        $ob_level = ob_get_level();
+        while ($ob_level > 0) {
+            ob_end_flush();
+            $ob_level--;
+        }
+        flush();
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        }
+
+        if (function_exists('ignore_user_abort')) {
+            ignore_user_abort(true);
+        }
+
+        global $updraftplus;
+
+        $options = array(
+            'use_timestamp' => $backup_id,
+            'use_nonce' => $nonce,
+        );
+
+        $updraftplus->boot_backup($backup_files, $backup_database, false, false, false, $options);
+
+        die();
     }
 
     /**
@@ -265,28 +287,46 @@ class Watchtower_Agent_Backup_Management {
             ), 400);
         }
 
-        error_log('Watchtower: Starting restore process for backup: ' . $timestamp);
+        $response_data = array(
+            'success' => true,
+            'message' => 'Restore started',
+            'timestamp' => $timestamp,
+        );
 
-        ignore_user_abort(true);
-        set_time_limit(600); // 10 minutes max
+        $json = json_encode($response_data);
 
-        ob_start();
+        header('Content-Length: ' . (4 + strlen($json)));
+        header('Connection: close');
+        header('Content-Type: application/json');
+        if (function_exists('session_id') && session_id()) {
+            session_write_close();
+        }
+        echo "\r\n\r\n";
+        echo $json;
+
+        $ob_level = ob_get_level();
+        while ($ob_level > 0) {
+            ob_end_flush();
+            $ob_level--;
+        }
+        flush();
+
+        if (function_exists('fastcgi_finish_request')) {
+            fastcgi_finish_request();
+        }
+        if (function_exists('litespeed_finish_request')) {
+            litespeed_finish_request();
+        }
+
+        if (function_exists('ignore_user_abort')) {
+            ignore_user_abort(true);
+        }
+
+        set_time_limit(600);
 
         do_action('watchtower_agent_execute_restore', $timestamp);
 
-        $restore_output = ob_get_clean();
-        if (!empty($restore_output)) {
-            error_log('Watchtower: Captured and discarded UpdraftPlus output (' . strlen($restore_output) . ' bytes)');
-        }
-
-        error_log('Watchtower: Restore action completed for backup: ' . $timestamp);
-
-        return new WP_REST_Response(array(
-            'success' => true,
-            'message' => 'Restore completed',
-            'timestamp' => $timestamp,
-            'components' => array('db', 'plugins', 'themes', 'uploads', 'others'),
-        ), 200);
+        die();
     }
 
     /**
@@ -294,9 +334,8 @@ class Watchtower_Agent_Backup_Management {
      */
     public function get_restore_status($request) {
         $restore_job_id = get_site_option('updraft_restore_in_progress');
-        $progress = get_site_option('watchtower_restore_progress', false);
 
-        if (!$restore_job_id && $progress === false) {
+        if (!$restore_job_id) {
             return new WP_REST_Response(array(
                 'success' => true,
                 'status' => 'idle',
@@ -305,38 +344,71 @@ class Watchtower_Agent_Backup_Management {
             ), 200);
         }
 
-        $status = 'running';
-        $message = 'Restore in progress';
-        $percent_complete = $progress !== false ? (int)$progress : 0;
+        global $updraftplus;
+        $jobdata = $updraftplus->jobdata_getarray($restore_job_id);
 
-        if ($progress === false && !$restore_job_id) {
-            $status = 'idle';
-            $percent_complete = 0;
-            $message = 'No restore in progress';
-        } elseif ($progress == 100) {
-            $status = 'complete';
-            $percent_complete = 100;
-            $message = 'Restore completed successfully';
-        } elseif ($progress == -1) {
-            $status = 'error';
-            $percent_complete = 0;
-            $message = 'Restore failed';
-        } else {
-            if ($percent_complete < 30) {
-                $message = 'Preparing restore...';
-            } elseif ($percent_complete < 60) {
-                $message = 'Restoring database...';
-            } elseif ($percent_complete < 90) {
-                $message = 'Restoring files...';
-            } else {
-                $message = 'Finishing restore...';
+        $status = 'running';
+        $percent_complete = 0;
+        $message = 'Restore in progress';
+
+        if (!empty($jobdata)) {
+            $jobstatus = empty($jobdata['jobstatus']) ? 'begun' : $jobdata['jobstatus'];
+
+            switch ($jobstatus) {
+                case 'begun':
+                    $percent_complete = 5;
+                    $message = 'Restore begun';
+                    break;
+                case 'downloading':
+                    $percent_complete = 10;
+                    $message = 'Downloading backup files';
+                    break;
+                case 'downloaded':
+                    $percent_complete = 20;
+                    $message = 'Backup files downloaded';
+                    break;
+                case 'restoring':
+                    $percent_complete = 30;
+                    $message = 'Restoring files';
+                    if (!empty($jobdata['restore_entity'])) {
+                        $message = 'Restoring ' . $jobdata['restore_entity'];
+                        if (!empty($jobdata['restore_progress'])) {
+                            $progress = min((float)$jobdata['restore_progress'], 1);
+                            $percent_complete = 30 + (60 * $progress);
+                        }
+                    }
+                    break;
+                case 'finishing':
+                    $percent_complete = 95;
+                    $message = 'Finishing restore';
+                    break;
+                case 'finished':
+                    $percent_complete = 100;
+                    $message = 'Restore completed successfully';
+                    $status = 'complete';
+                    break;
+            }
+        }
+
+        $custom_progress = get_site_option('watchtower_restore_progress', false);
+        if ($custom_progress !== false) {
+            if ($custom_progress == -1) {
+                $status = 'error';
+                $percent_complete = 0;
+                $message = 'Restore failed';
+            } elseif ($custom_progress == 100) {
+                $status = 'complete';
+                $percent_complete = 100;
+                $message = 'Restore completed successfully';
+            } elseif ($custom_progress > $percent_complete) {
+                $percent_complete = (int)$custom_progress;
             }
         }
 
         return new WP_REST_Response(array(
             'success' => true,
             'status' => $status,
-            'percent_complete' => $percent_complete,
+            'percent_complete' => round($percent_complete),
             'message' => $message,
             'job_id' => $restore_job_id,
         ), 200);
@@ -401,15 +473,69 @@ class Watchtower_Agent_Backup_Management {
         $job_data = get_transient('watchtower_backup_' . $timestamp);
 
         if ($job_data) {
+            global $updraftplus;
+            $jobdata = $updraftplus->jobdata_getarray($job_data['nonce']);
+
+            $status = 'running';
+            $percent_complete = 5;
+            $message = 'Starting backup...';
+
+            if (!empty($jobdata)) {
+                $jobstatus = empty($jobdata['jobstatus']) ? 'begun' : $jobdata['jobstatus'];
+
+                switch ($jobstatus) {
+                    case 'begun':
+                        $percent_complete = 10;
+                        $message = 'Backup begun';
+                        break;
+                    case 'filescreating':
+                        $percent_complete = 20;
+                        $message = 'Creating file backup zips';
+                        if (!empty($jobdata['filecreating_substatus'])) {
+                            if (isset($jobdata['filecreating_substatus']['i']) && isset($jobdata['filecreating_substatus']['t'])) {
+                                $t = max((int)$jobdata['filecreating_substatus']['t'], 1);
+                                $progress = $jobdata['filecreating_substatus']['i'] / $t;
+                                $percent_complete = 20 + (30 * $progress);
+                            }
+                        }
+                        break;
+                    case 'filescreated':
+                        $percent_complete = 50;
+                        $message = 'Created file backup zips';
+                        break;
+                    case 'clouduploading':
+                    case 'partialclouduploading':
+                        $percent_complete = 60;
+                        $message = 'Uploading files to remote storage';
+                        if (!empty($jobdata['uploading_substatus'])) {
+                            if (isset($jobdata['uploading_substatus']['i']) && isset($jobdata['uploading_substatus']['t'])) {
+                                $t = max((int)$jobdata['uploading_substatus']['t'], 1);
+                                $progress = $jobdata['uploading_substatus']['i'] / $t;
+                                $percent_complete = 60 + (30 * $progress);
+                            }
+                        }
+                        break;
+                    case 'pruning':
+                        $percent_complete = 95;
+                        $message = 'Pruning old backups';
+                        break;
+                    case 'finished':
+                        $percent_complete = 100;
+                        $message = 'Backup complete';
+                        $status = 'complete';
+                        break;
+                }
+            }
+
             return new WP_REST_Response(array(
                 'success' => true,
                 'id' => $timestamp,
                 'timestamp' => $timestamp,
-                'status' => $job_data['status'],
-                'percent_complete' => $job_data['percent_complete'],
+                'status' => $status,
+                'percent_complete' => round($percent_complete),
+                'message' => $message,
                 'type' => $job_data['type'],
                 'started_at' => $job_data['started_at'],
-                'error' => isset($job_data['error']) ? $job_data['error'] : null,
             ), 200);
         }
 

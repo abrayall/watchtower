@@ -2138,11 +2138,9 @@ class Watchtower_Manager_Admin_Dashboard {
                     <button class="watchtower-tab-btn" data-tab="users">
                         <span class="dashicons dashicons-admin-users"></span> Users
                     </button>
-                    <?php /* Backups tab disabled
                     <button class="watchtower-tab-btn" data-tab="backups">
                         <span class="dashicons dashicons-database-export"></span> Backups
                     </button>
-                    */ ?>
                     <button class="watchtower-tab-btn" data-tab="activity">
                         <span class="dashicons dashicons-clipboard"></span> Activity
                     </button>
@@ -2471,59 +2469,14 @@ class Watchtower_Manager_Admin_Dashboard {
                 </div>
             </div>
 
-            <?php /* Backups tab content disabled
             <!-- Tab Content: Backups -->
             <div class="watchtower-tab-content" id="tab-backups" style="display: none;">
-                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px;">
-                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
-                        <h2 style="margin: 0;">Backups</h2>
-                        <div style="display: flex; gap: 10px;">
-                            <button id="create-backup-btn" class="button button-primary">
-                                <span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now
-                            </button>
-                            <button id="refresh-backups-btn" class="button" style="display: inline-flex; align-items: center; justify-content: center; padding: 0 10px;" title="Refresh">
-                                <span class="dashicons dashicons-update" style="margin-top: 0;"></span>
-                            </button>
-                        </div>
-                    </div>
-                    <div id="backups-loading" style="text-align: center; padding: 40px;">
-                        <span class="dashicons dashicons-update" style="font-size: 32px; width: 32px; height: 32px; animation: rotation 2s infinite linear;"></span>
-                        <p>Loading backups...</p>
-                    </div>
-                    <div id="backups-container" style="display: none;">
-                        <table class="wp-list-table widefat fixed striped" id="backups-table">
-                            <thead>
-                                <tr>
-                                    <th style="width: 25%; font-weight: bold;">Date</th>
-                                    <th style="width: 15%; text-align: center; font-weight: bold;">Size</th>
-                                    <th style="width: 35%; text-align: center; font-weight: bold;">Components</th>
-                                    <th class="actions-column" style="width: 25%;">Actions</th>
-                                </tr>
-                            </thead>
-                            <tbody id="backups-table-body">
-                                <!-- Populated by JavaScript -->
-                            </tbody>
-                        </table>
-                    </div>
-                    <div id="backups-empty" style="display: none; text-align: center; padding: 40px;">
-                        <span class="dashicons dashicons-database-export" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
-                        <h3>No Backups Found</h3>
-                        <p style="color: #646970;">There are no backups for this site yet. Create your first backup to get started.</p>
-                        <button class="button button-primary" onclick="document.getElementById('create-backup-btn').click();">
-                            <span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now
-                        </button>
-                    </div>
-                    <div id="backups-error" style="display: none; background: #fff; padding: 40px; border: 1px solid #ccd0d4; border-radius: 8px; text-align: center;">
-                        <span class="dashicons dashicons-warning" style="font-size: 64px; width: 64px; height: 64px; color: #d63638; margin-bottom: 15px;"></span>
-                        <h3>Unable to Load Backups</h3>
-                        <p style="color: #646970;" id="backups-error-message">An error occurred while loading backups.</p>
-                        <button class="button button-primary" onclick="document.getElementById('refresh-backups-btn').click();">
-                            <span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Retry
-                        </button>
-                    </div>
+                <div style="background: #fff; padding: 60px 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px; text-align: center;">
+                    <span class="dashicons dashicons-database-export" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
+                    <h2>Backup Functionality Coming Soon</h2>
+                    <p style="color: #646970; max-width: 500px; margin: 0 auto;">Site backup and restore features are currently under development and will be available in a future update.</p>
                 </div>
             </div>
-            */ ?>
 
             <!-- Restore Progress Modal -->
             <div id="restore-progress-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
