@@ -372,12 +372,11 @@ class Watchtower_Manager_Storage {
             }
 
             $has_intermission = false;
-            if (isset($static_data['plugins']['active_plugins'])) {
-                foreach ($static_data['plugins']['active_plugins'] as $plugin) {
-                    if (isset($plugin['file']) && $plugin['file'] === 'intermission/intermission.php') {
-                        $has_intermission = true;
-                        break;
-                    }
+            $plugins_list = isset($static_data['plugins']['plugins']) ? $static_data['plugins']['plugins'] : array();
+            foreach ($plugins_list as $plugin) {
+                if (isset($plugin['file']) && $plugin['file'] === 'intermission/intermission.php') {
+                    $has_intermission = true;
+                    break;
                 }
             }
 
@@ -443,6 +442,12 @@ class Watchtower_Manager_Storage {
         $this->fetch_and_save_backups($site_url, $agent, $request_args);
         $this->fetch_and_save_users($site_url, $agent, $request_args);
 
+        if (isset($static_data['plugins'])) {
+            $plugins_data = $static_data['plugins'];
+            $plugins_data['fetched_at'] = current_time('mysql');
+            $this->save_plugins_data($site_url, $plugins_data);
+        }
+
         return $this->save_health_data($site_url, $dynamic_data);
     }
 
@@ -487,7 +492,7 @@ class Watchtower_Manager_Storage {
     /**
      * Save backups data to backups.json
      */
-    private function save_backups_data($site_url, $backups_data) {
+    public function save_backups_data($site_url, $backups_data) {
         $site_dir = $this->get_site_dir($site_url);
         $file_path = $site_dir . 'backups.json';
 
@@ -596,6 +601,44 @@ class Watchtower_Manager_Storage {
         }
 
         return $users_data;
+    }
+
+    /**
+     * Save plugins data to plugins.json
+     */
+    public function save_plugins_data($site_url, $plugins_data) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'plugins.json';
+
+        if (!file_exists($site_dir)) {
+            wp_mkdir_p($site_dir);
+        }
+
+        $json = json_encode($plugins_data, JSON_PRETTY_PRINT);
+        $result = file_put_contents($file_path, $json);
+
+        return $result !== false;
+    }
+
+    /**
+     * Get plugins data from plugins.json
+     */
+    public function get_plugins_data($site_url) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'plugins.json';
+
+        if (!file_exists($file_path)) {
+            return null;
+        }
+
+        $json = file_get_contents($file_path);
+        $plugins_data = json_decode($json, true);
+
+        if (!is_array($plugins_data)) {
+            return null;
+        }
+
+        return $plugins_data;
     }
 
     /**

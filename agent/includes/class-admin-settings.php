@@ -113,6 +113,12 @@ class Watchtower_Agent_Admin_Settings {
             'type' => 'boolean',
             'default' => true,
         ));
+
+        register_setting('watchtower_agent_settings', 'watchtower_agent_external_url', array(
+            'type' => 'string',
+            'sanitize_callback' => 'esc_url_raw',
+            'default' => '',
+        ));
     }
 
     /**
@@ -121,6 +127,7 @@ class Watchtower_Agent_Admin_Settings {
     public function render_settings_page() {
         $manager_url = get_option('watchtower_agent_manager_url', '');
         $auto_register = get_option('watchtower_agent_auto_register', true);
+        $external_url = get_option('watchtower_agent_external_url', '');
         $last_registration = get_option('watchtower_agent_last_registration', '');
         $registration_status = get_option('watchtower_agent_registration_status', '');
 
@@ -176,6 +183,23 @@ class Watchtower_Agent_Admin_Settings {
                                     <?php else: ?>
                                         Enter the URL of your Watchtower Manager installation (e.g., https://manager.example.com)
                                     <?php endif; ?>
+                                </p>
+                            </td>
+                        </tr>
+
+                        <tr>
+                            <th scope="row">
+                                <label for="watchtower_agent_external_url">Agent URL</label>
+                            </th>
+                            <td>
+                                <input type="url"
+                                       id="watchtower_agent_external_url"
+                                       name="watchtower_agent_external_url"
+                                       value="<?php echo esc_attr($external_url); ?>"
+                                       class="regular-text"
+                                       placeholder="<?php echo esc_attr(get_site_url()); ?>">
+                                <p class="description">
+                                    URL the manager should use to reach this agent. Leave blank to use <code><?php echo esc_html(get_site_url()); ?></code>
                                 </p>
                             </td>
                         </tr>

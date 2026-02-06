@@ -102,9 +102,9 @@ add_action('plugins_loaded', 'watchtower_manager_init');
 
 add_filter('cron_schedules', 'watchtower_manager_add_cron_schedules');
 function watchtower_manager_add_cron_schedules($schedules) {
-    $schedules['every_five_minutes'] = array(
-        'interval' => 300, // 5 minutes in seconds
-        'display' => __('Every 5 Minutes')
+    $schedules['every_fifteen_minutes'] = array(
+        'interval' => 900, // 15 minutes in seconds
+        'display' => __('Every 15 Minutes')
     );
 
     $schedules['daily'] = array(
@@ -184,7 +184,7 @@ function watchtower_manager_activate() {
     }
 
     if (!wp_next_scheduled('watchtower_manager_poll_health')) {
-        wp_schedule_event(time(), 'every_five_minutes', 'watchtower_manager_poll_health');
+        wp_schedule_event(time(), 'every_fifteen_minutes', 'watchtower_manager_poll_health');
         error_log('Watchtower Manager: Health polling cron job scheduled');
     }
 

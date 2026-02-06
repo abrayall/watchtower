@@ -258,6 +258,8 @@ class Watchtower_Agent_Backup_Management {
      * Restore backup
      */
     public function restore_backup($request) {
+        error_log('Watchtower Agent REST: restore_backup called with ID: ' . $request->get_param('id'));
+
         if (!class_exists('UpdraftPlus')) {
             return new WP_REST_Response(array(
                 'success' => false,
@@ -295,13 +297,12 @@ class Watchtower_Agent_Backup_Management {
 
         $json = json_encode($response_data);
 
-        header('Content-Length: ' . (4 + strlen($json)));
+        header('Content-Length: ' . strlen($json));
         header('Connection: close');
         header('Content-Type: application/json');
         if (function_exists('session_id') && session_id()) {
             session_write_close();
         }
-        echo "\r\n\r\n";
         echo $json;
 
         $ob_level = ob_get_level();
@@ -324,7 +325,7 @@ class Watchtower_Agent_Backup_Management {
 
         set_time_limit(600);
 
-        do_action('watchtower_agent_execute_restore', $timestamp);
+        watchtower_agent_execute_restore_callback($timestamp);
 
         die();
     }
@@ -576,12 +577,13 @@ class Watchtower_Agent_Backup_Management {
         $backup = $backup_history[$timestamp];
         $nonce = isset($backup['nonce']) ? $backup['nonce'] : '';
 
-        $opts = array(
-            'what' => $timestamp,
-            'nonce' => $nonce,
-        );
+        $_POST['backup_timestamp'] = $timestamp;
+        $_POST['backup_nonce'] = $nonce;
 
-        $updraftplus_admin->delete_set($opts);
+        $updraftplus_admin->delete_set(array(
+            'backup_timestamp' => $timestamp,
+            'backup_nonce' => $nonce
+        ));
 
         return new WP_REST_Response(array(
             'success' => true,

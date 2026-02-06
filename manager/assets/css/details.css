@@ -633,9 +633,18 @@
         vertical-align: middle !important;
     }
 
-    #tab-plugins table th:nth-child(3),
-    #tab-plugins table td:nth-child(3) {
+    #tab-plugins table .plugin-slug-col,
+    #tab-plugins table .plugin-state-col,
+    #tab-plugins table .plugin-actions-col {
         display: none !important;
+    }
+
+    #tab-plugins .plugin-row {
+        cursor: pointer;
+    }
+
+    #tab-plugins .plugin-row:hover {
+        background: #f0f6fc !important;
     }
 
     .users-table {
@@ -1094,6 +1103,16 @@
     border: none !important;
     box-shadow: none !important;
 }
+
+a:focus,
+a:active,
+button:focus,
+button:active,
+.button:focus,
+.button:active {
+    outline: none !important;
+    box-shadow: none !important;
+}
 .backup-component-badge {
     display: inline-block;
     padding: 3px 8px;
@@ -1105,14 +1124,11 @@
     color: #2c3338;
     text-transform: capitalize;
 }
-.backup-component-badge:first-child {
-    background: #e5f5fa;
-    color: #007cba;
-}
 
 #create-user-btn,
 #new-file-btn,
-#new-directory-btn {
+#new-directory-btn,
+#create-backup-btn {
     display: inline-flex !important;
     align-items: center;
     justify-content: center;
@@ -1121,7 +1137,8 @@
 
 #create-user-btn .dashicons,
 #new-file-btn .dashicons,
-#new-directory-btn .dashicons {
+#new-directory-btn .dashicons,
+#create-backup-btn .dashicons {
     font-size: 18px;
     width: 18px;
     height: 18px;

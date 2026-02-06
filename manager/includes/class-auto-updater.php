@@ -66,10 +66,18 @@ class Watchtower_Manager_Auto_Updater {
         }
 
         usort($files, function($a, $b) {
-            return filemtime($b) - filemtime($a);
+            $a_version = basename($a, '.zip');
+            $b_version = basename($b, '.zip');
+            return version_compare($b_version, $a_version);
         });
 
-        return $files[0];
+        $latest = $files[0];
+
+        for ($i = 1; $i < count($files); $i++) {
+            @unlink($files[$i]);
+        }
+
+        return $latest;
     }
 
     /**

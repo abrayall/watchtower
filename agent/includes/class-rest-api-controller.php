@@ -128,20 +128,7 @@ class Watchtower_Agent_REST_Controller {
             'https' => is_ssl(),
         );
 
-        $active_plugins = get_option('active_plugins', array());
-        $plugins_info = array(
-            'active_count' => count($active_plugins),
-            'active_plugins' => array(),
-        );
-
-        foreach ($active_plugins as $plugin_file) {
-            $plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin_file, false, false);
-            $plugins_info['active_plugins'][] = array(
-                'name' => $plugin_data['Name'],
-                'version' => $plugin_data['Version'],
-                'file' => $plugin_file,
-            );
-        }
+        $plugins_info = $this->get_plugins_info();
 
         $theme = wp_get_theme();
         $theme_info = array(
@@ -322,20 +309,7 @@ class Watchtower_Agent_REST_Controller {
             );
         }
 
-        $active_plugins = get_option('active_plugins', array());
-        $plugins_info = array(
-            'active_count' => count($active_plugins),
-            'active_plugins' => array(),
-        );
-
-        foreach ($active_plugins as $plugin_file) {
-            $plugin_data = get_plugin_data(WP_PLUGIN_DIR . '/' . $plugin_file, false, false);
-            $plugins_info['active_plugins'][] = array(
-                'name' => $plugin_data['Name'],
-                'version' => $plugin_data['Version'],
-                'file' => $plugin_file,
-            );
-        }
+        $plugins_info = $this->get_plugins_info();
 
         $theme = wp_get_theme();
         $theme_info = array(
@@ -399,6 +373,79 @@ class Watchtower_Agent_REST_Controller {
         }
 
         return $size;
+    }
+
+    private function get_plugins_info() {
+        require_once(ABSPATH . 'wp-admin/includes/plugin.php');
+        require_once(ABSPATH . 'wp-admin/includes/update.php');
+
+        $all_plugins = get_plugins();
+        $active_plugins = get_option('active_plugins', array());
+        $update_plugins = get_site_transient('update_plugins');
+
+        $plugins = array();
+
+        foreach ($all_plugins as $plugin_file => $plugin_data) {
+            $slug = dirname($plugin_file);
+            if ($slug === '.') {
+                $slug = basename($plugin_file, '.php');
+            }
+
+            $is_active = in_array($plugin_file, $active_plugins);
+
+            $update_info = null;
+            $update_available = false;
+            if ($update_plugins) {
+                if (isset($update_plugins->response[$plugin_file])) {
+                    $update_info = $update_plugins->response[$plugin_file];
+                    $update_available = true;
+                } elseif (isset($update_plugins->no_update[$plugin_file])) {
+                    $update_info = $update_plugins->no_update[$plugin_file];
+                }
+            }
+
+            $plugin = array(
+                'file' => $plugin_file,
+                'slug' => $slug,
+                'name' => $plugin_data['Name'] ?? '',
+                'version' => $plugin_data['Version'] ?? '',
+                'description' => $plugin_data['Description'] ?? '',
+                'author' => $plugin_data['Author'] ?? '',
+                'author_uri' => $plugin_data['AuthorURI'] ?? '',
+                'plugin_uri' => $plugin_data['PluginURI'] ?? '',
+                'text_domain' => $plugin_data['TextDomain'] ?? '',
+                'domain_path' => $plugin_data['DomainPath'] ?? '',
+                'network' => !empty($plugin_data['Network']),
+                'requires_wp' => $plugin_data['RequiresWP'] ?? null,
+                'requires_php' => $plugin_data['RequiresPHP'] ?? null,
+                'update_uri' => $plugin_data['UpdateURI'] ?? null,
+                'requires_plugins' => $plugin_data['RequiresPlugins'] ?? null,
+                'active' => $is_active,
+                'update_available' => $update_available,
+            );
+
+            if ($update_info) {
+                $plugin['wp_org'] = array(
+                    'id' => $update_info->id ?? null,
+                    'slug' => $update_info->slug ?? null,
+                    'url' => $update_info->url ?? null,
+                    'package' => $update_info->package ?? null,
+                    'new_version' => $update_info->new_version ?? null,
+                    'requires' => $update_info->requires ?? null,
+                    'requires_php' => $update_info->requires_php ?? null,
+                    'icons' => isset($update_info->icons) ? (array)$update_info->icons : null,
+                );
+            }
+
+            $plugins[] = $plugin;
+        }
+
+        return array(
+            'total_count' => count($all_plugins),
+            'active_count' => count($active_plugins),
+            'update_count' => ($update_plugins && isset($update_plugins->response)) ? count($update_plugins->response) : 0,
+            'plugins' => $plugins,
+        );
     }
 
     /**

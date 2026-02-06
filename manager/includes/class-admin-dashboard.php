@@ -37,6 +37,7 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_toggle_debug', array($this, 'ajax_toggle_debug'));
         add_action('wp_ajax_watchtower_manager_get_backups', array($this, 'ajax_get_backups'));
         add_action('wp_ajax_watchtower_manager_create_backup', array($this, 'ajax_create_backup'));
+        add_action('wp_ajax_watchtower_manager_get_backup_status', array($this, 'ajax_get_backup_status'));
         add_action('wp_ajax_watchtower_manager_restore_backup', array($this, 'ajax_restore_backup'));
         add_action('wp_ajax_watchtower_manager_get_restore_status', array($this, 'ajax_get_restore_status'));
         add_action('wp_ajax_watchtower_manager_delete_backup', array($this, 'ajax_delete_backup'));
@@ -62,21 +63,30 @@ class Watchtower_Manager_Admin_Dashboard {
     public function add_admin_menu() {
         add_menu_page(
             'Remote Sites',           // Page title
-            'Sites',                  // Menu title
+            'Watchtower',             // Menu title
             'manage_options',         // Capability
             'watchtower-manager',      // Menu slug
             array($this, 'render_dashboard'), // Callback
-            'dashicons-admin-site-alt3', // Icon
+            'dashicons-visibility', // Icon
             30                        // Position
         );
 
         add_submenu_page(
             'watchtower-manager',
-            'All Sites',
-            'All Sites',
+            'Sites',
+            'Sites',
             'manage_options',
             'watchtower-manager',
             array($this, 'render_dashboard')
+        );
+
+        add_submenu_page(
+            'watchtower-manager',
+            'Plugins',
+            'Plugins',
+            'manage_options',
+            'watchtower-manager-plugins',
+            array($this, 'render_plugins_page')
         );
 
         add_submenu_page(
@@ -516,6 +526,297 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     /**
+     * Render plugins page
+     */
+    public function render_plugins_page() {
+        $agents = $this->storage->get_all_agents();
+
+        $all_plugins = array();
+        $total_installations = 0;
+        $active_installations = 0;
+        $updates_available = 0;
+
+        foreach ($agents as $agent) {
+            $plugins_data = $this->storage->get_plugins_data($agent['site']);
+            if (!$plugins_data || empty($plugins_data['plugins'])) {
+                continue;
+            }
+
+            $site_name = isset($agent['name']) ? $agent['name'] : parse_url($agent['site'], PHP_URL_HOST);
+
+            foreach ($plugins_data['plugins'] as $plugin) {
+                $slug = $plugin['slug'];
+                $version = $plugin['version'];
+
+                if (!isset($all_plugins[$slug])) {
+                    $all_plugins[$slug] = array(
+                        'name' => $plugin['name'],
+                        'slug' => $slug,
+                        'description' => $plugin['description'] ?? '',
+                        'author' => $plugin['author'] ?? '',
+                        'plugin_uri' => $plugin['plugin_uri'] ?? '',
+                        'versions' => array(),
+                        'sites' => array(),
+                        'active_count' => 0,
+                        'update_available_count' => 0,
+                    );
+                }
+
+                if (!isset($all_plugins[$slug]['versions'][$version])) {
+                    $all_plugins[$slug]['versions'][$version] = array(
+                        'count' => 0,
+                        'sites' => array(),
+                    );
+                }
+
+                $all_plugins[$slug]['versions'][$version]['count']++;
+                $all_plugins[$slug]['versions'][$version]['sites'][] = array(
+                    'name' => $site_name,
+                    'url' => $agent['site'],
+                    'active' => !empty($plugin['active']),
+                    'update_available' => !empty($plugin['update_available']),
+                );
+
+                $all_plugins[$slug]['sites'][] = $site_name;
+                $total_installations++;
+
+                if (!empty($plugin['active'])) {
+                    $all_plugins[$slug]['active_count']++;
+                    $active_installations++;
+                }
+
+                if (!empty($plugin['update_available'])) {
+                    $all_plugins[$slug]['update_available_count']++;
+                    $updates_available++;
+                }
+            }
+        }
+
+        usort($all_plugins, function($a, $b) {
+            return strcasecmp($a['name'], $b['name']);
+        });
+
+        $unique_plugins = count($all_plugins);
+        ?>
+        <div class="wrap">
+            <h1 class="wp-heading-inline" style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
+                <span>Plugins</span>
+                <span style="font-size: 14px; font-weight: 400; color: #646970;">Manager: <?php echo esc_html(WATCHTOWER_MANAGER_VERSION); ?></span>
+            </h1>
+            <hr class="wp-header-end">
+
+            <div style="position: relative; min-height: 400px;">
+                <div id="watchtower-plugins-loading" style="position: absolute; top: 0; left: 0; right: 0; bottom: 0; background: #fff; z-index: 100; display: flex; align-items: center; justify-content: center; min-height: 400px;">
+                    <div class="watchtower-spinner"></div>
+                </div>
+
+                <div id="watchtower-plugins-content" style="opacity: 0; transition: opacity 0.3s ease;">
+            <div class="watchtower-manager-dashboard">
+                <div class="stats-grid">
+                    <div class="stat-card stat-total filter-card" data-filter="all" onclick="filterPlugins('all')">
+                        <h3>
+                            Unique Plugins
+                            <span class="dashicons dashicons-admin-plugins"></span>
+                        </h3>
+                        <div class="stat-value"><?php echo $unique_plugins; ?></div>
+                    </div>
+                    <div class="stat-card stat-healthy-good filter-card" data-filter="active" onclick="filterPlugins('active')">
+                        <h3>
+                            Active
+                            <span class="dashicons dashicons-yes-alt"></span>
+                        </h3>
+                        <div class="stat-value"><?php echo $active_installations; ?></div>
+                    </div>
+                    <div class="stat-card <?php echo $updates_available > 0 ? 'stat-unhealthy-warning' : 'stat-unhealthy-none'; ?> filter-card" data-filter="updates" onclick="filterPlugins('updates')">
+                        <h3>
+                            Updates
+                            <span class="dashicons dashicons-update"></span>
+                        </h3>
+                        <div class="stat-value"><?php echo $updates_available; ?></div>
+                    </div>
+                </div>
+
+                <div class="sites-table">
+                    <?php if (empty($all_plugins)): ?>
+                        <div class="empty-state">
+                            <span class="dashicons dashicons-admin-plugins"></span>
+                            <h3>No plugins found</h3>
+                            <p>Plugin data will appear here once sites are registered and scanned.</p>
+                        </div>
+                        <script>
+                        jQuery(document).ready(function($) {
+                            setTimeout(function() {
+                                $('#watchtower-plugins-loading').fadeOut(300, function() {
+                                    $(this).remove();
+                                });
+                                $('#watchtower-plugins-content').css('opacity', '1');
+                            }, 300);
+                        });
+                        </script>
+                    <?php else: ?>
+                        <table class="wp-list-table widefat fixed striped">
+                            <thead>
+                                <tr>
+                                    <th style="font-weight: bold;">Plugin</th>
+                                    <th style="font-weight: bold;">Slug</th>
+                                    <th style="font-weight: bold;">Versions</th>
+                                    <th style="font-weight: bold; width: 80px; text-align: right;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                <?php foreach ($all_plugins as $plugin):
+                                    $plugin_json = esc_attr(json_encode($plugin));
+                                    $has_updates = $plugin['update_available_count'] > 0 ? 'true' : 'false';
+                                    $has_active = $plugin['active_count'] > 0 ? 'true' : 'false';
+                                ?>
+                                    <tr class="global-plugin-row clickable-row" data-plugin="<?php echo $plugin_json; ?>" data-has-updates="<?php echo $has_updates; ?>" data-has-active="<?php echo $has_active; ?>" style="cursor: pointer;">
+                                        <td>
+                                            <strong><?php echo esc_html($plugin['name']); ?></strong>
+                                            <div style="font-size: 12px; margin-top: 4px;">
+                                                <span style="background: #e5f3ff; color: #0073aa; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600;"><?php echo count($plugin['sites']); ?> site<?php echo count($plugin['sites']) !== 1 ? 's' : ''; ?></span>
+                                                <?php if ($plugin['update_available_count'] > 0): ?>
+                                                    <span style="background: #fcf0e3; color: #996800; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 6px;"><?php echo $plugin['update_available_count']; ?> update<?php echo $plugin['update_available_count'] !== 1 ? 's' : ''; ?></span>
+                                                <?php endif; ?>
+                                            </div>
+                                        </td>
+                                        <td><code><?php echo esc_html($plugin['slug']); ?></code></td>
+                                        <td>
+                                            <?php
+                                            krsort($plugin['versions']);
+                                            $version_badges = array();
+                                            foreach ($plugin['versions'] as $version => $info) {
+                                                $version_badges[] = '<span style="background: #f0f0f1; padding: 2px 8px; border-radius: 3px; font-size: 12px; margin-right: 4px; display: inline-block; margin-bottom: 4px;">' . esc_html($version) . '</span>';
+                                            }
+                                            echo implode('', $version_badges);
+                                            ?>
+                                        </td>
+                                        <td style="text-align: right;"><button class="button global-plugin-details-btn">Details</button></td>
+                                    </tr>
+                                <?php endforeach; ?>
+                            </tbody>
+                        </table>
+
+                        <div id="global-plugin-details-dialog" class="watchtower-dialog-overlay" style="display: none;">
+                            <div class="watchtower-dialog" style="max-width: 700px; width: 90%;">
+                                <div class="watchtower-dialog-header">
+                                    <span class="dashicons dashicons-admin-plugins watchtower-dialog-icon prompt"></span>
+                                    <h3 class="watchtower-dialog-title" id="global-plugin-dialog-title" style="flex: 1;">Plugin Details</h3>
+                                </div>
+                                <div class="watchtower-dialog-body" id="global-plugin-dialog-body" style="font-weight: normal; max-height: 400px; overflow-y: auto;">
+                                </div>
+                                <div class="watchtower-dialog-footer">
+                                    <button class="watchtower-dialog-button secondary" id="global-plugin-dialog-close">Close</button>
+                                </div>
+                            </div>
+                        </div>
+
+                        <script>
+                        var currentPluginFilter = null;
+
+                        function filterPlugins(filter) {
+                            var $ = jQuery;
+                            var $cards = $('.filter-card');
+                            var $rows = $('.global-plugin-row');
+
+                            if (currentPluginFilter === filter) {
+                                currentPluginFilter = null;
+                                $cards.removeClass('active');
+                                $rows.show();
+                                return;
+                            }
+
+                            currentPluginFilter = filter;
+                            $cards.removeClass('active');
+                            $cards.filter('[data-filter="' + filter + '"]').addClass('active');
+
+                            $rows.each(function() {
+                                var $row = $(this);
+                                var show = false;
+
+                                if (filter === 'all') {
+                                    show = true;
+                                } else if (filter === 'updates') {
+                                    show = $row.data('has-updates') === true || $row.data('has-updates') === 'true';
+                                } else if (filter === 'active') {
+                                    show = $row.data('has-active') === true || $row.data('has-active') === 'true';
+                                }
+
+                                $row.toggle(show);
+                            });
+                        }
+
+                        jQuery(document).ready(function($) {
+                            function showGlobalPluginDetails(plugin) {
+                                var html = '<div style="line-height: 1.8;">';
+
+                                html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">';
+                                html += '<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600; width: 120px;">Slug</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1;"><code>' + plugin.slug + '</code></td></tr>';
+                                if (plugin.author) {
+                                    html += '<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600;">Author</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1;">' + plugin.author + '</td></tr>';
+                                }
+                                html += '</table>';
+
+                                html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+                                html += '<thead><tr><th style="padding: 8px 0; border-bottom: 1px solid #ccd0d4; text-align: left; font-weight: 600; color: #1d2327; background: none;">Site</th><th style="padding: 8px 0; border-bottom: 1px solid #ccd0d4; text-align: left; font-weight: 600; color: #1d2327; background: none;">Version</th></tr></thead>';
+                                html += '<tbody>';
+                                var versions = Object.keys(plugin.versions).sort().reverse();
+                                versions.forEach(function(version) {
+                                    var info = plugin.versions[version];
+                                    info.sites.forEach(function(site) {
+                                        var updateTag = site.update_available ? '<span style="background: #fcf0e3; color: #996800; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 8px;">update</span>' : '';
+                                        html += '<tr>';
+                                        html += '<td style="padding: 10px 0; border-bottom: 1px solid #f0f0f1;"><a href="admin.php?page=watchtower-manager-site-details&site=' + encodeURIComponent(site.url) + '">' + site.name + '</a></td>';
+                                        html += '<td style="padding: 10px 0; border-bottom: 1px solid #f0f0f1;">' + version + updateTag + '</td>';
+                                        html += '</tr>';
+                                    });
+                                });
+                                html += '</tbody></table>';
+
+                                html += '</div>';
+
+                                $('#global-plugin-dialog-title').text(plugin.name);
+                                $('#global-plugin-dialog-body').html(html);
+                                $('#global-plugin-details-dialog').show();
+                            }
+
+                            $(document).on('click', '.global-plugin-row', function(e) {
+                                if ($(e.target).is('a, button')) {
+                                    return;
+                                }
+                                var plugin = $(this).data('plugin');
+                                if (plugin) {
+                                    showGlobalPluginDetails(plugin);
+                                }
+                            });
+
+                            $('#global-plugin-dialog-close').on('click', function() {
+                                $('#global-plugin-details-dialog').hide();
+                            });
+
+                            $('#global-plugin-details-dialog').on('click', function(e) {
+                                if ($(e.target).hasClass('watchtower-dialog-overlay')) {
+                                    $(this).hide();
+                                }
+                            });
+
+                            setTimeout(function() {
+                                $('#watchtower-plugins-loading').fadeOut(300, function() {
+                                    $(this).remove();
+                                });
+                                $('#watchtower-plugins-content').css('opacity', '1');
+                            }, 300);
+                        });
+                        </script>
+                    <?php endif; ?>
+                </div>
+            </div>
+                </div>
+            </div>
+        </div>
+        <?php
+    }
+
+    /**
      * Render settings page
      */
     public function render_settings() {
@@ -807,6 +1108,8 @@ class Watchtower_Manager_Admin_Dashboard {
         }
 
         $site_url = sanitize_text_field($_POST['site']);
+        $force_refresh = isset($_POST['force_refresh']) && $_POST['force_refresh'];
+
         $agent = $this->storage->get_agent_by_url($site_url);
 
         if (!$agent) {
@@ -814,17 +1117,21 @@ class Watchtower_Manager_Admin_Dashboard {
             return;
         }
 
-        $backups_data = $this->storage->get_backups_data($site_url);
-
-        if (!$backups_data || !isset($backups_data['fetched_at'])) {
+        if ($force_refresh) {
             $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
         } else {
-            $fetched_time = strtotime($backups_data['fetched_at']);
-            $current_time = current_time('timestamp');
-            $age_seconds = $current_time - $fetched_time;
+            $backups_data = $this->storage->get_backups_data($site_url);
 
-            if ($age_seconds > 300) { // 5 minutes
+            if (!$backups_data || !isset($backups_data['fetched_at'])) {
                 $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
+            } else {
+                $fetched_time = strtotime($backups_data['fetched_at']);
+                $current_time = current_time('timestamp');
+                $age_seconds = $current_time - $fetched_time;
+
+                if ($age_seconds > 300) { // 5 minutes
+                    $backups_data = $this->fetch_backups_from_agent($site_url, $agent);
+                }
             }
         }
 
@@ -865,6 +1172,7 @@ class Watchtower_Manager_Admin_Dashboard {
         }
 
         $data['fetched_at'] = current_time('mysql');
+        $this->storage->save_backups_data($site_url, $data);
         return $data;
     }
 
@@ -914,6 +1222,51 @@ class Watchtower_Manager_Admin_Dashboard {
     }
 
     /**
+     * AJAX: Get backup status
+     */
+    public function ajax_get_backup_status() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = sanitize_text_field($_POST['site']);
+        $backup_id = intval($_POST['backup_id']);
+
+        $agent = $this->storage->get_agent_by_url($site_url);
+
+        if (!$agent) {
+            wp_send_json_error(array('message' => 'Agent not found'));
+            return;
+        }
+
+        $status_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/backups/' . $backup_id);
+
+        $response = wp_remote_get($status_url, array(
+            'headers' => array(
+                'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
+            ),
+            'timeout' => 15,
+            'sslverify' => false,
+        ));
+
+        if (is_wp_error($response)) {
+            wp_send_json_error(array('message' => $response->get_error_message()));
+            return;
+        }
+
+        $body = wp_remote_retrieve_body($response);
+        $data = json_decode($body, true);
+
+        if ($data && isset($data['success']) && $data['success']) {
+            wp_send_json_success($data);
+        } else {
+            wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
+        }
+    }
+
+    /**
      * AJAX: Restore backup
      */
     public function ajax_restore_backup() {
@@ -935,6 +1288,9 @@ class Watchtower_Manager_Admin_Dashboard {
 
         $restore_url = watchtower_manager_translate_agent_url($site_url, '/watchtower-agent/v1/restore');
 
+        error_log('Watchtower Manager: POST request to: ' . $restore_url);
+        error_log('Watchtower Manager: Backup ID: ' . $backup_id);
+
         $response = wp_remote_post($restore_url, array(
             'headers' => array(
                 'Authorization' => 'Basic ' . base64_encode($agent['username'] . ':' . $agent['password']),
@@ -945,22 +1301,22 @@ class Watchtower_Manager_Admin_Dashboard {
             'sslverify' => false,
         ));
 
+        error_log('Watchtower Manager: Restore response status: ' . wp_remote_retrieve_response_code($response));
+
         if (is_wp_error($response)) {
-            error_log('Watchtower Manager: Restore request failed: ' . $response->get_error_message());
+            error_log('Watchtower Manager: Restore request error: ' . $response->get_error_message());
             wp_send_json_error(array('message' => $response->get_error_message()));
             return;
         }
 
-        $status_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
 
-        error_log('Watchtower Manager: Restore response status: ' . $status_code);
-        error_log('Watchtower Manager: Restore response body: ' . substr($body, 0, 500));
+        error_log('Watchtower Manager: Restore response body: ' . "\n" . $body);
 
         $data = json_decode($body, true);
 
         if (!$data) {
-            wp_send_json_error(array('message' => 'Invalid JSON response from agent. Status: ' . $status_code));
+            wp_send_json_error(array('message' => 'Invalid JSON response from agent'));
             return;
         }
 
@@ -1058,6 +1414,11 @@ class Watchtower_Manager_Admin_Dashboard {
         $data = json_decode($body, true);
 
         if ($data && isset($data['success']) && $data['success']) {
+            $backups_data = $this->storage->get_backups_data($site_url);
+            if ($backups_data) {
+                $backups_data['fetched_at'] = '1970-01-01 00:00:00';
+                $this->storage->save_backups_data($site_url, $backups_data);
+            }
             wp_send_json_success($data);
         } else {
             wp_send_json_error(array('message' => isset($data['error']) ? $data['error'] : 'Unknown error'));
@@ -2335,38 +2696,68 @@ class Watchtower_Manager_Admin_Dashboard {
 
             <!-- Tab Content: Plugins -->
             <div class="watchtower-tab-content" id="tab-plugins" style="display: none;">
-                <?php if ($has_health_data && isset($health_data['plugins']) && !empty($health_data['plugins']['active_plugins'])): ?>
+                <?php
+                $plugins_data = $this->storage->get_plugins_data($agent['site']);
+                $plugins_list = isset($plugins_data['plugins']) ? $plugins_data['plugins'] : array();
+                ?>
+                <?php if (!empty($plugins_list)): ?>
                 <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
-                        <h2 style="margin: 0;">Active Plugins</h2>
+                        <h2 style="margin: 0;">Plugins</h2>
                     </div>
-                    <table class="wp-list-table widefat fixed striped">
+                    <table class="wp-list-table widefat fixed striped watchtower-plugins-table">
                         <thead>
                             <tr>
-                                <th style="font-weight: bold;">Plugin Name</th>
+                                <th style="font-weight: bold;">Name</th>
                                 <th style="font-weight: bold;">Version</th>
-                                <th style="font-weight: bold;">File</th>
+                                <th style="font-weight: bold;" class="plugin-state-col">State</th>
+                                <th style="font-weight: bold;" class="plugin-slug-col">Slug</th>
+                                <th style="font-weight: bold; width: 80px; text-align: right;" class="plugin-actions-col">Actions</th>
                             </tr>
                         </thead>
                         <tbody>
                             <?php
-                            $sorted_plugins = $health_data['plugins']['active_plugins'];
+                            $sorted_plugins = $plugins_list;
                             usort($sorted_plugins, function($a, $b) {
                                 return strcasecmp($a['name'], $b['name']);
                             });
                             foreach ($sorted_plugins as $plugin):
+                            $plugin_json = esc_attr(json_encode($plugin));
+                            $is_active = !empty($plugin['active']);
                             ?>
-                                <tr>
+                                <tr class="plugin-row" data-plugin="<?php echo $plugin_json; ?>">
                                     <td><?php echo esc_html($plugin['name']); ?></td>
                                     <td><?php echo esc_html($plugin['version']); ?></td>
-                                    <td><code><?php echo esc_html($plugin['file']); ?></code></td>
+                                    <td class="plugin-state-col">
+                                        <?php if ($is_active): ?>
+                                            <span style="background: #d5f3e5; color: #00a32a; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600;">Active</span>
+                                        <?php else: ?>
+                                            <span style="background: #f0f0f1; color: #646970; padding: 2px 8px; border-radius: 3px; font-size: 11px; font-weight: 600;">Inactive</span>
+                                        <?php endif; ?>
+                                    </td>
+                                    <td class="plugin-slug-col"><code><?php echo esc_html($plugin['slug']); ?></code></td>
+                                    <td class="plugin-actions-col" style="text-align: right;"><button class="button plugin-details-btn">Details</button></td>
                                 </tr>
                             <?php endforeach; ?>
                         </tbody>
                     </table>
+
+                    <div id="plugin-details-dialog" class="watchtower-dialog-overlay" style="display: none;">
+                        <div class="watchtower-dialog" style="max-width: 600px;">
+                            <div class="watchtower-dialog-header">
+                                <span class="dashicons dashicons-admin-plugins watchtower-dialog-icon prompt"></span>
+                                <h3 class="watchtower-dialog-title" id="plugin-dialog-title" style="flex: 1;">Plugin Details</h3>
+                            </div>
+                            <div class="watchtower-dialog-body" id="plugin-dialog-body" style="font-weight: normal; max-height: 400px; overflow-y: auto;">
+                            </div>
+                            <div class="watchtower-dialog-footer">
+                                <button class="watchtower-dialog-button secondary" id="plugin-dialog-close">Close</button>
+                            </div>
+                        </div>
+                    </div>
                     <div style="margin-top: 20px;">
                         <div style="color: #666; font-size: 13px;">
-                            Total: <?php echo count($health_data['plugins']['active_plugins']); ?> plugins
+                            Total: <?php echo count($plugins_list); ?> plugins (<?php echo $plugins_data['active_count'] ?? 0; ?> active)
                         </div>
                     </div>
                 </div>
@@ -2471,10 +2862,59 @@ class Watchtower_Manager_Admin_Dashboard {
 
             <!-- Tab Content: Backups -->
             <div class="watchtower-tab-content" id="tab-backups" style="display: none;">
-                <div style="background: #fff; padding: 60px 20px; border: 1px solid #ccd0d4; border-radius: 8px; margin-top: 20px; text-align: center;">
-                    <span class="dashicons dashicons-database-export" style="font-size: 64px; width: 64px; height: 64px; color: #646970; margin-bottom: 15px;"></span>
-                    <h2>Backup Functionality Coming Soon</h2>
-                    <p style="color: #646970; max-width: 500px; margin: 0 auto;">Site backup and restore features are currently under development and will be available in a future update.</p>
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Backups</h2>
+                        <button id="create-backup-btn" class="button button-primary">
+                            <span class="dashicons dashicons-plus-alt"></span> Backup
+                        </button>
+                    </div>
+                    <div id="backups-loading" style="text-align: center; padding: 40px;">
+                        <div class="watchtower-spinner" style="margin: 0 auto 15px;"></div>
+                        <p>Loading backups...</p>
+                    </div>
+                    <div id="backups-container" style="display: none;">
+                        <table class="wp-list-table widefat fixed striped backups-table" id="backups-table">
+                            <thead>
+                                <tr>
+                                    <th style="width: 25%; font-weight: bold;">Time</th>
+                                    <th style="width: 15%; font-weight: bold;">Size</th>
+                                    <th style="width: 40%; font-weight: bold;">Components</th>
+                                    <th class="actions-column" style="width: 20%;">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="backups-tbody">
+                            </tbody>
+                        </table>
+                        <div class="mobile-backups-grid" style="display: none;">
+                        </div>
+                    </div>
+                    <div id="backups-empty" style="display: none; text-align: center; padding: 40px; color: #646970;">
+                        <span class="dashicons dashicons-database-export" style="font-size: 64px; width: 64px; height: 64px; color: #c3c4c7; margin-bottom: 15px;"></span>
+                        <h3 style="font-size: 16px; margin-bottom: 8px;">No backups found</h3>
+                        <p style="margin: 0;">Create your first backup to get started.</p>
+                    </div>
+                    <div id="backups-error" style="display: none; padding: 20px; background: #fcdddd; border: 1px solid #d63638; border-radius: 4px; color: #d63638;">
+                        <strong>Error loading backups:</strong> <span id="backups-error-message"></span>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Backup Progress Modal -->
+            <div id="backup-progress-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
+                <div style="background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
+                    <h2 style="margin-top: 0; margin-bottom: 20px;">Creating Backup</h2>
+
+                    <div style="background: #f0f0f1; border-radius: 4px; height: 30px; overflow: hidden; margin-bottom: 15px;">
+                        <div id="backup-progress-bar" style="background: linear-gradient(90deg, #2271b1, #135e96); height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">
+                            <span id="backup-progress-percent">0%</span>
+                        </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; justify-content: space-between; min-height: 32px;">
+                        <p id="backup-progress-message" style="margin: 0; color: #646970; flex: 1;">Initializing backup...</p>
+                        <button id="backup-progress-close" class="button button-secondary" style="display: none; margin-left: 15px;">Close</button>
+                    </div>
                 </div>
             </div>
 
@@ -2482,7 +2922,6 @@ class Watchtower_Manager_Admin_Dashboard {
             <div id="restore-progress-modal" style="display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.7); z-index: 100000; justify-content: center; align-items: center;">
                 <div style="background: #fff; padding: 30px; border-radius: 8px; max-width: 500px; width: 90%; box-shadow: 0 10px 40px rgba(0,0,0,0.3);">
                     <h2 style="margin-top: 0; margin-bottom: 20px;">Restoring Backup</h2>
-                    <p id="restore-progress-message" style="margin-bottom: 20px; color: #646970;">Initializing restore...</p>
 
                     <div style="background: #f0f0f1; border-radius: 4px; height: 30px; overflow: hidden; margin-bottom: 15px;">
                         <div id="restore-progress-bar" style="background: linear-gradient(90deg, #2271b1, #135e96); height: 100%; width: 0%; transition: width 0.3s ease; display: flex; align-items: center; justify-content: center; color: #fff; font-weight: bold; font-size: 12px;">
@@ -2490,8 +2929,9 @@ class Watchtower_Manager_Admin_Dashboard {
                         </div>
                     </div>
 
-                    <div style="text-align: center;">
-                        <button id="restore-progress-close" class="button button-secondary" style="display: none;">Close</button>
+                    <div style="display: flex; align-items: center; justify-content: space-between; min-height: 32px;">
+                        <p id="restore-progress-message" style="margin: 0; color: #646970; flex: 1;">Initializing restore...</p>
+                        <button id="restore-progress-close" class="button button-secondary" style="display: none; margin-left: 15px;">Close</button>
                     </div>
                 </div>
             </div>

@@ -188,6 +188,9 @@ function watchtower_agent_activate() {
  * @return true|string Returns true on success, error message string on failure
  */
 function watchtower_agent_register_with_manager($username, $password) {
+    $external_url = get_option('watchtower_agent_external_url', '');
+    $site_url = !empty($external_url) ? $external_url : get_site_url();
+
     $manager_storage_file = WP_PLUGIN_DIR . '/watchtower-manager/includes/class-storage.php';
     $manager_active = is_plugin_active('watchtower-manager/manager.php');
 
@@ -197,7 +200,7 @@ function watchtower_agent_register_with_manager($username, $password) {
         $storage = new Watchtower_Manager_Storage();
 
         $agent_data = array(
-            'site' => get_site_url(),
+            'site' => $site_url,
             'admin_url' => get_admin_url(),
             'username' => $username,
             'password' => $password,
@@ -232,10 +235,10 @@ function watchtower_agent_register_with_manager($username, $password) {
             return $error;
         }
 
-        $manager_url = $manager_base_url . '/wp-json/watchtower-manager/v1/register';
+        $manager_url = rtrim($manager_base_url, '/') . '/index.php?rest_route=/watchtower-manager/v1/register';
 
         $registration_data = array(
-            'site' => get_site_url(),
+            'site' => $site_url,
             'admin_url' => get_admin_url(),
             'username' => $username,
             'password' => $password,
@@ -250,29 +253,60 @@ function watchtower_agent_register_with_manager($username, $password) {
                 'Content-Type' => 'application/json',
             ),
             'timeout' => 15,
+            'sslverify' => false,
         ));
 
         if (is_wp_error($response)) {
-            $error = $response->get_error_message();
+            $error = 'Connection failed: ' . $response->get_error_message();
             error_log('Watchtower Agent: Failed to register with manager: ' . $error);
             return $error;
         }
 
+        $status_code = wp_remote_retrieve_response_code($response);
         $body = wp_remote_retrieve_body($response);
+
+        error_log('Watchtower Agent: Registration response code: ' . $status_code);
+        error_log('Watchtower Agent: Registration response body: ' . substr($body, 0, 500));
+
+        if ($status_code === 0) {
+            return 'Connection failed: No response from server';
+        }
+
+        if ($status_code === 404) {
+            return 'Manager endpoint not found (404). Is Watchtower Manager plugin active at ' . $manager_base_url . '?';
+        }
+
+        if ($status_code === 500) {
+            return 'Manager server error (500). Check manager error logs.';
+        }
+
+        if ($status_code === 301 || $status_code === 302) {
+            $redirect = wp_remote_retrieve_header($response, 'location');
+            return 'Redirect detected (HTTP ' . $status_code . '). Manager URL may need adjustment. Redirecting to: ' . $redirect;
+        }
+
         $data = json_decode($body, true);
+
+        if ($data === null && !empty($body)) {
+            $preview = substr(strip_tags($body), 0, 100);
+            return 'Invalid JSON response (HTTP ' . $status_code . '). Response: ' . $preview . '...';
+        }
 
         if ($data && isset($data['success']) && $data['success']) {
             error_log('Watchtower Agent: Successfully registered with manager (remote)');
 
             update_option('watchtower_manager_url', $manager_base_url);
-            update_option('watchtower_external_site_url', $registration_data['site']);  // URL manager knows us by
+            update_option('watchtower_external_site_url', $registration_data['site']);
             if (empty(get_option('watchtower_manager_key'))) {
                 update_option('watchtower_manager_key', 'local-manager');
             }
 
             return true;
         } else {
-            $error = isset($data['error']) ? $data['error'] : 'Unknown error from manager';
+            $error = isset($data['error']) ? $data['error'] : 'Registration failed (HTTP ' . $status_code . ')';
+            if (isset($data['message'])) {
+                $error .= ': ' . $data['message'];
+            }
             error_log('Watchtower Agent: Manager registration returned error: ' . $error);
             return $error;
         }

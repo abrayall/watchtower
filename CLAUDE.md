@@ -50,6 +50,34 @@ docker exec wordpress_site chown -R www-data:www-data /var/www/html/wp-content/p
 
 ## Build System
 
+This project uses [wordsmith](https://github.com/abrayall/wordsmith) for building.
+
+### Building Both Plugins
+
+```bash
+./build.sh
+```
+
+This builds both plugins and bundles the agent ZIP inside the manager:
+- `agent/build/watchtower-agent-{version}.zip`
+- `manager/build/watchtower-{version}.zip`
+
+### Building Individual Plugins
+
+```bash
+cd agent && wordsmith build
+cd manager && wordsmith build
+```
+
+### Deploying to Local WordPress
+
+Each plugin can use wordsmith's WordPress environment:
+
+```bash
+cd agent && wordsmith wordpress start
+cd agent && wordsmith deploy
+```
+
 ### Version Management
 
 Versions are managed using **git tags** in the format `v{major}.{minor}.{maintenance}`.
@@ -58,34 +86,6 @@ Versions are managed using **git tags** in the format `v{major}.{minor}.{mainten
 - `0.0.1` - Clean release at tag `v0.0.1`
 - `0.0.1-2` - 2 commits after tag
 - `0.0.1-2-10271436` - 2 commits after tag + local changes (timestamp: Oct 27, 14:36)
-
-### Build Scripts
-
-**Unix/Linux/Mac:**
-```bash
-./build.sh
-```
-
-**Windows:**
-```cmd
-build.bat
-```
-
-### How Versioning Works
-
-1. Reads latest git tag matching `v*.*.*` format
-2. If commits exist after tag, appends commit count
-3. If uncommitted local changes exist, appends timestamp `MMDDHHMM`
-4. Generates `version.properties` during build process
-5. Includes in both plugin packages
-
-**Output:**
-- `build/watchtower-agent-{version}.zip`
-- `build/watchtower-manager-{version}.zip`
-
-### Current Version
-- **Latest Tag**: `v0.0.12`
-- **Development Version**: `0.0.12-{timestamp}`
 
 ## Plugin Architecture
 
@@ -119,8 +119,7 @@ watchtower/
 │               ├── info.json     # Static configuration
 │               └── health.json   # Dynamic metrics
 │
-├── build.sh                # Unix build script
-├── build.bat               # Windows build script
+├── build.sh                # Build script (uses wordsmith)
 ├── README.md               # User documentation
 └── CLAUDE.md               # This file
 ```
@@ -332,7 +331,7 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 
 1. Make code changes
 2. Test locally
-3. Build plugins: `./build.sh`
+3. Build plugins: `./build.sh` (uses wordsmith)
 4. Deploy to Docker:
    ```bash
    cd build
@@ -350,14 +349,15 @@ curl -s -u "admin:DQ7w 6Xth 1DyA oLgZ uCIK k8n7" http://localhost:8082/wp-json/w
 1. Commit all changes
 2. Create version tag: `git tag v0.0.2`
 3. Push tag: `git push origin v0.0.2`
-4. Build release: `./build.sh`
+4. Build release: `./build.sh` (uses wordsmith)
 5. Upload ZIP files to WordPress via admin interface
 
 ## Important Files
 
 ### Build System
-- `build.sh` - Unix/Linux/Mac build script
-- `build.bat` - Windows build script
+- `build.sh` - Builds both plugins using wordsmith
+- `agent/plugin.properties` - Agent build configuration
+- `manager/plugin.properties` - Manager build configuration
 - `version.properties` - Generated during build from git tags
 
 ### Agent Plugin

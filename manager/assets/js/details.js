@@ -381,7 +381,7 @@
             }
         });
 
-        function loadBackups() {
+        function loadBackups(forceRefresh) {
             $('#backups-loading').show();
             $('#backups-container').hide();
             $('#backups-empty').hide();
@@ -390,7 +390,8 @@
             $.post(context.ajaxurl, {
                 action: 'watchtower_manager_get_backups',
                 site: context.siteUrl,
-                nonce: context.nonce
+                nonce: context.nonce,
+                force_refresh: forceRefresh || false
             }, function(response) {
                 $('#backups-loading').hide();
 
@@ -398,7 +399,7 @@
                     var backups = response.data.backups || [];
 
                     if (backups.length > 0) {
-                        var tbody = $('#backups-table-body');
+                        var tbody = $('#backups-tbody');
                         tbody.empty();
 
                         backups.forEach(function(backup) {
@@ -408,17 +409,15 @@
 
                             var sizeText = backup.size ? formatBytes(backup.size) : '-';
 
+                            var dateFormatted = backup.date.replace(' ', ' at ');
+
                             var row = $('<tr></tr>');
-                            row.append('<td><strong>' + backup.date + '</strong><br><small>ID: ' + backup.id + '</small></td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' + sizeText + '</td>');
-                            row.append('<td style="text-align: center; vertical-align: middle;">' + componentsHtml + '</td>');
-                            row.append('<td style="text-align: right; vertical-align: middle;">' +
-                                '<button class="button button-small restore-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
-                                '<span class="dashicons dashicons-update" style="margin-top: 3px;"></span> Restore' +
-                                '</button> ' +
-                                '<button class="button button-small button-link-delete delete-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">' +
-                                '<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete' +
-                                '</button>' +
+                            row.append('<td><strong>' + dateFormatted + '</strong></td>');
+                            row.append('<td>' + sizeText + '</td>');
+                            row.append('<td>' + componentsHtml + '</td>');
+                            row.append('<td style="text-align: right;">' +
+                                '<button class="button button-small restore-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '">Restore</button> ' +
+                                '<button class="button button-small delete-backup-btn" data-backup-id="' + backup.id + '" data-backup-date="' + backup.date + '" style="color: #d63638;">Delete</button>' +
                                 '</td>');
                             tbody.append(row);
                         });
@@ -447,29 +446,30 @@
                     return;
                 }
 
-                button.prop('disabled', true).html('<span class="dashicons dashicons-update" style="margin-top: 3px; display: inline-block; transform-origin: center center; animation: rotation 2s infinite linear;"></span> Creating...');
+                $('#backup-progress-modal').css('display', 'flex');
+                $('#backup-progress-message').text('Starting backup...');
+                $('#backup-progress-bar').css('width', '0%');
+                $('#backup-progress-percent').text('0%');
+                $('#backup-progress-close').hide();
+
+                button.prop('disabled', true);
 
                 $.post(context.ajaxurl, {
                     action: 'watchtower_manager_create_backup',
                     site: context.siteUrl,
                     nonce: context.nonce
                 }, function(response) {
-                    if (response.success) {
-                        button.html('<span class="dashicons dashicons-yes" style="margin-top: 3px;"></span> Backup Started!').css('color', '#00a32a');
-                        setTimeout(function() {
-                            button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now').css('color', '');
-                            $('#backups-table').data('loaded', false);
-                            loadBackups();
-                        }, 2000);
+                    if (response.success && response.data && response.data.id) {
+                        pollBackupProgress(response.data.id);
                     } else {
-                        showAlert('Failed to create backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
-                            button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
-                        });
+                        $('#backup-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
+                        $('#backup-progress-close').show();
+                        button.prop('disabled', false);
                     }
                 }).fail(function() {
-                    showAlert('Network error while creating backup').then(function() {
-                        button.prop('disabled', false).html('<span class="dashicons dashicons-plus-alt" style="margin-top: 3px;"></span> Backup Now');
-                    });
+                    $('#backup-progress-message').html('<span style="color: #d63638;">Network error while starting backup</span>');
+                    $('#backup-progress-close').show();
+                    button.prop('disabled', false);
                 });
             });
         });
@@ -502,7 +502,9 @@
                     nonce: context.nonce
                 }, function(response) {
                     if (response.success) {
-                        pollRestoreProgress();
+                        setTimeout(function() {
+                            pollRestoreProgress();
+                        }, 3000);
                     } else {
                         $('#restore-progress-message').html('<span style="color: #d63638;">Failed: ' + (response.data && response.data.message ? response.data.message : 'Unknown error') + '</span>');
                         $('#restore-progress-close').show();
@@ -555,6 +557,49 @@
             $('#restore-progress-modal').hide();
         });
 
+        var backupProgressInterval;
+        function pollBackupProgress(backupId) {
+            backupProgressInterval = setInterval(function() {
+                $.post(context.ajaxurl, {
+                    action: 'watchtower_manager_get_backup_status',
+                    site: context.siteUrl,
+                    backup_id: backupId,
+                    nonce: context.nonce
+                }, function(response) {
+                    if (response.success && response.data.success) {
+                        var status = response.data.status;
+                        var percent = response.data.percent_complete;
+                        var message = response.data.message;
+
+                        $('#backup-progress-bar').css('width', percent + '%');
+                        $('#backup-progress-percent').text(percent + '%');
+                        $('#backup-progress-message').text(message);
+
+                        if (status === 'complete') {
+                            clearInterval(backupProgressInterval);
+                            $('#backup-progress-message').html('<span style="color: #00a32a;">Backup completed successfully!</span>');
+                            $('#backup-progress-close').show();
+                            $('#create-backup-btn').prop('disabled', false);
+                            $('#backups-table').data('loaded', false);
+                            loadBackups(true);
+                        } else if (status === 'error') {
+                            clearInterval(backupProgressInterval);
+                            $('#backup-progress-message').html('<span style="color: #d63638;">Backup failed: ' + message + '</span>');
+                            $('#backup-progress-close').show();
+                            $('#create-backup-btn').prop('disabled', false);
+                        }
+                    }
+                });
+            }, 2000);
+        }
+
+        $('#backup-progress-close').on('click', function() {
+            if (backupProgressInterval) {
+                clearInterval(backupProgressInterval);
+            }
+            $('#backup-progress-modal').hide();
+        });
+
         $(document).on('click', '.delete-backup-btn', function() {
             var button = $(this);
             var backupId = button.data('backup-id');
@@ -573,22 +618,23 @@
                     backup_id: backupId,
                     nonce: context.nonce
                 }, function(response) {
-                    if (response.success) {
-                        button.closest('tr').fadeOut(300, function() {
-                            $(this).remove();
-                            if ($('#backups-table-body tr').length === 0) {
-                                $('#backups-container').hide();
-                                $('#backups-empty').show();
-                            }
-                        });
+                    if (response.success && response.data && response.data.success) {
+                        $('#backups-table').data('loaded', false);
+                        loadBackups(true);
                     } else {
-                        showAlert('Failed to delete backup: ' + (response.data && response.data.message ? response.data.message : 'Unknown error')).then(function() {
-                            button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+                        var errorMsg = 'Failed to delete backup';
+                        if (response.data && response.data.message) {
+                            errorMsg += ': ' + response.data.message;
+                        } else if (response.data && response.data.error) {
+                            errorMsg += ': ' + response.data.error;
+                        }
+                        showAlert(errorMsg).then(function() {
+                            button.prop('disabled', false).text('Delete').css('color', '#d63638');
                         });
                     }
                 }).fail(function() {
                     showAlert('Network error while deleting backup').then(function() {
-                        button.prop('disabled', false).html('<span class="dashicons dashicons-trash" style="margin-top: 3px;"></span> Delete');
+                        button.prop('disabled', false).text('Delete').css('color', '#d63638');
                     });
                 });
             });
@@ -1474,6 +1520,12 @@
                         loadFiles('/');
                     }, 100);
                 }
+
+                if (hash === 'backups') {
+                    setTimeout(function() {
+                        loadBackups();
+                    }, 100);
+                }
             }
         }
 
@@ -2024,6 +2076,85 @@
                     showAlert('Failed to toggle maintenance mode: ' + error);
                 }
             });
+        });
+
+        function showPluginDetails(plugin) {
+            var statusBadge = plugin.active
+                ? '<span style="background: #d5f3e5; color: #00a32a; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600;">Active</span>'
+                : '<span style="background: #f0f0f1; color: #646970; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600;">Inactive</span>';
+
+            var updateBadge = plugin.update_available
+                ? '<span style="background: #fcf0e3; color: #996800; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 6px;">Update Available</span>'
+                : '';
+
+            $('#plugin-dialog-title').html('<span style="display: flex; justify-content: space-between; align-items: center; width: 100%;"><span>' + plugin.name + '</span><span>' + statusBadge + updateBadge + '</span></span>');
+
+            var html = '<div style="line-height: 1.8;">';
+            html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
+
+            var rows = [
+                ['Slug', '<code>' + (plugin.slug || '-') + '</code>'],
+                ['Version', plugin.version || '-'],
+                ['Author', plugin.author || '-'],
+                ['Requires WordPress', plugin.requires_wp || '-'],
+                ['Requires PHP', plugin.requires_php || '-']
+            ];
+
+            if (plugin.plugin_uri) {
+                rows.push(['Plugin URL', '<a href="' + plugin.plugin_uri + '" target="_blank">' + plugin.plugin_uri + '</a>']);
+            }
+
+            if (plugin.wp_org && plugin.wp_org.url) {
+                rows.push(['WordPress.org', '<a href="' + plugin.wp_org.url + '" target="_blank">View on WordPress.org</a>']);
+            }
+
+            rows.forEach(function(row) {
+                html += '<tr>';
+                html += '<td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600; width: 140px; color: #1d2327;">' + row[0] + '</td>';
+                html += '<td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; color: #50575e;">' + row[1] + '</td>';
+                html += '</tr>';
+            });
+
+            html += '</table>';
+
+            if (plugin.description) {
+                html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ccd0d4;">';
+                html += '<strong style="display: block; margin-bottom: 8px;">Description</strong>';
+                html += '<div style="color: #50575e; font-size: 13px;">' + plugin.description + '</div>';
+                html += '</div>';
+            }
+
+            html += '</div>';
+
+            $('#plugin-dialog-body').html(html);
+            $('#plugin-details-dialog').show();
+        }
+
+        $(document).on('click', '.plugin-details-btn', function(e) {
+            e.stopPropagation();
+            var plugin = $(this).closest('tr').data('plugin');
+            if (plugin) {
+                showPluginDetails(plugin);
+            }
+        });
+
+        $(document).on('click', '.plugin-row', function(e) {
+            if ($(window).width() <= 782 && !$(e.target).is('button')) {
+                var plugin = $(this).data('plugin');
+                if (plugin) {
+                    showPluginDetails(plugin);
+                }
+            }
+        });
+
+        $('#plugin-dialog-close').on('click', function() {
+            $('#plugin-details-dialog').hide();
+        });
+
+        $('#plugin-details-dialog').on('click', function(e) {
+            if ($(e.target).hasClass('watchtower-dialog-overlay')) {
+                $(this).hide();
+            }
         });
 
         setTimeout(function() {

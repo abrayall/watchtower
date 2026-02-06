@@ -11,7 +11,15 @@ Central management plugin that provides a dashboard to monitor and manage multip
 - Multi-site dashboard with health status monitoring
 - Real-time site health checks (CPU, Memory, Disk, PHP, WordPress versions)
 - Site details page with comprehensive metrics
-- Network-wide plugin management capabilities
+- **Global Plugins page** - View all plugins across all managed sites
+  - Filterable cards (All Plugins, Active, Updates Available)
+  - Clickable rows to view plugin details
+  - Details dialog showing all sites/versions with update indicators
+- **Maintenance mode toggle** - Enable/disable maintenance mode on remote sites
+- **Backup management** - View, create, and restore backups with background processing
+- **User management** - View and manage administrator users across sites
+- **Agent auto-update** - Automatically update agents during health scans
+- Configurable health polling interval (default: 15 minutes)
 - Multisite support with subdirectory installations
 
 **Location:** `manager/`
@@ -22,11 +30,19 @@ Agent plugin that runs on managed WordPress sites and provides REST API endpoint
 **Features:**
 - REST API endpoints for site information and health data
 - Automatic registration with manager plugin
-- Application password authentication
+- **Agent URL setting** - Configure external URL for Docker/proxy/NAT scenarios
+- Application password authentication (auto-creates on activation)
 - Comprehensive health monitoring (server, database, plugins, themes)
+- **Detailed plugin inventory** - Collects slug, version, update status, WP.org data, icons, requirements
 - User management endpoints
 - Backup management integration (UpdraftPlus)
+  - Create full or partial backups
+  - List and restore backups with progress tracking
+  - Automatic weekly backups with retention (keeps last 3)
+- Maintenance mode management (Intermission plugin integration)
 - Update management capabilities
+- **Wordfence compatibility** - Automatically enables Application Passwords if blocked
+- Periodic re-registration with credential rotation (twice daily)
 
 **Location:** `agent/`
 
@@ -62,8 +78,11 @@ Data Directory (outside plugin, persists across updates):
 wp-content/watchtower-manager/
 └── sites/
     └── {hostname-port-path}/         # Individual site directories
-        ├── info.json                 # Agent configuration
-        └── health.json               # Latest health data
+        ├── info.json                 # Agent configuration and static data
+        ├── health.json               # Latest health metrics (CPU, memory, disk)
+        ├── plugins.json              # Plugin inventory
+        ├── backups.json              # Backup list
+        └── users.json                # Administrator users
 ```
 
 ### Agent Plugin Structure
@@ -74,10 +93,15 @@ watchtower-agent/
 │   ├── class-watchtower-agent.php      # Core plugin class
 │   ├── class-rest-api-controller.php   # REST API routes and health endpoint
 │   ├── class-admin-settings.php        # Settings page
+│   ├── class-audit-logger.php          # Action logging
 │   └── endpoints/
-│       ├── class-user-management.php   # User CRUD operations
-│       ├── class-backup-management.php # Backup operations
-│       └── class-update-management.php # Plugin/theme updates
+│       ├── class-user-management.php       # User CRUD operations
+│       ├── class-backup-management.php     # Backup operations (UpdraftPlus)
+│       ├── class-update-management.php     # Plugin/theme updates
+│       ├── class-maintenance-management.php # Maintenance mode toggle
+│       ├── class-file-management.php       # File operations
+│       ├── class-log-management.php        # Log retrieval
+│       └── class-audit-endpoint.php        # Audit log access
 ```
 
 ## REST API Endpoints
@@ -137,56 +161,40 @@ Both plugins support WordPress multisite installations:
 
 ## Building
 
-### Creating Plugin Packages
+Build both plugins using [wordsmith](https://github.com/abrayall/wordsmith):
 
-Build scripts are provided to package the plugins as WordPress-ready ZIP files:
-
-**Unix/Linux/Mac:**
 ```bash
 ./build.sh
 ```
 
-**Windows:**
-```cmd
-build.bat
-```
+This builds both plugins and bundles the agent ZIP inside the manager:
+- `agent/build/watchtower-agent-{version}.zip`
+- `manager/build/watchtower-{version}.zip`
 
-The build process will:
-1. Read the version from `version.properties`
-2. Create distributable packages for both plugins
-3. Output ZIP files to the `build/` directory:
-   - `watchtower-agent-{version}.zip`
-   - `watchtower-manager-{version}.zip`
+You can also build each plugin individually:
+
+```bash
+cd agent && wordsmith build
+cd manager && wordsmith build
+```
 
 These ZIP files can be uploaded directly to WordPress via **Plugins → Add New → Upload Plugin**.
 
 ### Version Management
 
-Version information is managed using **git tags**. The build scripts automatically:
-1. Read the latest git tag matching the format `v*.*.*` (e.g., `v0.0.1`)
-2. Parse the version numbers from the tag
-3. If there are commits after the tag, append the short commit hash to the maintenance version (e.g., `1-78b24c1`)
-4. Generate `version.properties` during the build process
-5. Include it in both plugin packages
-
-**Version Format:**
-- **Exact tag**: `v0.0.1` → version `0.0.1`
-- **After tag**: `v0.0.1-1-g78b24c1` → version `0.0.1-78b24c1`
+Version information is managed using **git tags**:
 
 **To release a new version:**
 ```bash
-# Create and push a new version tag
 git tag v0.0.2
 git push origin v0.0.2
-
-# Build the plugins
-./build.sh  # or build.bat on Windows
+./build.sh
 ```
 
-**Development builds:**
-Any commits after a tag will automatically include the commit hash in the version number, making it easy to identify development builds vs. official releases.
-
-The plugins will automatically use the version from the latest git tag. If no tag exists, the build defaults to `v0.0.1`.
+**Version Format:**
+- **Exact tag**: `v0.0.1` → version `0.0.1`
+- **After tag**: `v0.0.1-5` → version `0.0.1-5`
+- **Uncommitted changes**: Appends timestamp
 
 ## Development
 
@@ -198,7 +206,12 @@ The plugins were developed and tested with:
 - Docker-based local environment
 
 ### Health Check Polling
-The manager plugin automatically polls agent sites every 5 minutes via WordPress cron to update health data.
+The manager plugin automatically polls agent sites every 15 minutes via WordPress cron to update health data. During each poll:
+- Fetches site info and health metrics
+- Collects plugin inventory data
+- Retrieves backup status
+- Fetches administrator user list
+- Optionally auto-updates outdated agents
 
 ## Security
 
@@ -211,10 +224,11 @@ The manager plugin automatically polls agent sites every 5 minutes via WordPress
 
 The following features are planned for future releases:
 
-- **User Management Support** - Create, edit, and manage WordPress users across all managed sites from the central dashboard
-- **Backup Support** - Enhanced backup management with scheduling, restoration, and monitoring capabilities
+- **Batch Health Polling** - Process agents in parallel batches for improved scalability with large numbers of sites
+- **Adaptive Polling** - Poll healthy sites less frequently, unhealthy sites more frequently
 - **Traffic Stats Integration** - Support for popular analytics plugins (MonsterInsights, Google Analytics 4) to display traffic metrics in the dashboard
 - **Security Integration** - Integration with security plugins (Wordfence, etc.) to monitor security events, firewall status, and threats across managed sites
+- **Bulk Plugin Updates** - Update plugins across multiple sites from the global Plugins page
 
 ## License
 
