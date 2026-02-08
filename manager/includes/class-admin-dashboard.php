@@ -636,6 +636,133 @@ class Watchtower_Manager_Admin_Dashboard {
                     </div>
                 </div>
 
+                <div class="plugins-toolbar">
+                    <div class="wt-btn-combo wt-btn-combo-right" id="plugins-export-dropdown">
+                        <button class="wt-btn-icon" id="plugins-export-btn" title="Export">
+                            <span class="dashicons dashicons-download"></span>
+                            <span class="dashicons dashicons-arrow-down-alt2 wt-btn-caret"></span>
+                        </button>
+                        <div class="wt-btn-combo-menu" id="plugins-export-menu">
+                            <a href="#" class="wt-btn-combo-item" data-export="by-plugin">
+                                <span class="dashicons dashicons-admin-plugins"></span>
+                                By Plugin
+                            </a>
+                            <a href="#" class="wt-btn-combo-item" data-export="by-site">
+                                <span class="dashicons dashicons-admin-site"></span>
+                                By Site
+                            </a>
+                        </div>
+                    </div>
+                    <button class="wt-btn-icon" onclick="location.reload()" title="Refresh">
+                        <span class="dashicons dashicons-update"></span>
+                    </button>
+                </div>
+                <style>
+                    .plugins-toolbar {
+                        display: flex;
+                        justify-content: flex-end;
+                        margin-bottom: 12px;
+                        gap: 8px;
+                    }
+                    .wt-btn-icon {
+                        display: inline-flex;
+                        align-items: center;
+                        justify-content: center;
+                        gap: 4px;
+                        width: 32px;
+                        height: 32px;
+                        padding: 0;
+                        background: transparent;
+                        border: 1px solid #2271b1;
+                        border-radius: 4px;
+                        color: #2271b1;
+                        cursor: pointer;
+                        transition: all 0.15s ease;
+                    }
+                    .wt-btn-icon:hover {
+                        background: #2271b1;
+                        color: #fff;
+                    }
+                    .wt-btn-icon .dashicons {
+                        font-size: 16px;
+                        width: 16px;
+                        height: 16px;
+                        line-height: 1;
+                    }
+                    .wt-btn-icon .wt-btn-caret {
+                        font-size: 12px;
+                        width: 12px;
+                        height: 12px;
+                        margin-left: -2px;
+                        transition: transform 0.15s ease;
+                    }
+                    .wt-btn-combo {
+                        position: relative;
+                        display: inline-flex;
+                    }
+                    .wt-btn-combo > .wt-btn-icon {
+                        width: auto;
+                        padding: 0 8px;
+                    }
+                    .wt-btn-combo.wt-open > .wt-btn-icon .wt-btn-caret {
+                        transform: rotate(180deg);
+                    }
+                    .wt-btn-combo-menu {
+                        position: absolute;
+                        top: 100%;
+                        left: 0;
+                        z-index: 100;
+                        min-width: 160px;
+                        margin-top: 4px;
+                        padding: 4px 0;
+                        background: #fff;
+                        border: 1px solid #ccd0d4;
+                        border-radius: 6px;
+                        box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+                        opacity: 0;
+                        visibility: hidden;
+                        transform: translateY(-8px);
+                        transition: opacity 0.15s ease, visibility 0.15s ease, transform 0.15s ease;
+                    }
+                    .wt-btn-combo.wt-open .wt-btn-combo-menu {
+                        opacity: 1;
+                        visibility: visible;
+                        transform: translateY(0);
+                    }
+                    .wt-btn-combo-right .wt-btn-combo-menu {
+                        left: auto;
+                        right: 0;
+                    }
+                    .wt-btn-combo-item {
+                        display: flex;
+                        align-items: center;
+                        gap: 8px;
+                        width: 100%;
+                        padding: 8px 16px;
+                        background: none;
+                        border: none;
+                        font-size: 13px;
+                        color: #1d2327;
+                        text-align: left;
+                        text-decoration: none !important;
+                        cursor: pointer;
+                        transition: background-color 0.1s ease, color 0.1s ease;
+                    }
+                    .wt-btn-combo-item:hover {
+                        background: #f0f0f1;
+                        color: #2271b1;
+                    }
+                    .wt-btn-combo-item .dashicons {
+                        font-size: 16px;
+                        width: 16px;
+                        height: 16px;
+                        opacity: 0.7;
+                    }
+                    .wt-btn-combo-item:hover .dashicons {
+                        opacity: 1;
+                    }
+                </style>
+
                 <div class="sites-table">
                     <?php if (empty($all_plugins)): ?>
                         <div class="empty-state">
@@ -780,7 +907,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             }
 
                             $(document).on('click', '.global-plugin-row', function(e) {
-                                if ($(e.target).is('a, button')) {
+                                if ($(e.target).is('a')) {
                                     return;
                                 }
                                 var plugin = $(this).data('plugin');
@@ -805,6 +932,87 @@ class Watchtower_Manager_Admin_Dashboard {
                                 });
                                 $('#watchtower-plugins-content').css('opacity', '1');
                             }, 300);
+
+                            $('#plugins-export-btn').on('click', function(e) {
+                                e.stopPropagation();
+                                $('#plugins-export-dropdown').toggleClass('wt-open');
+                            });
+
+                            $(document).on('click', function(e) {
+                                if (!$(e.target).closest('#plugins-export-dropdown').length) {
+                                    $('#plugins-export-dropdown').removeClass('wt-open');
+                                }
+                            });
+
+                            $('.wt-btn-combo-item').on('click', function(e) {
+                                e.preventDefault();
+                                var exportType = $(this).data('export');
+                                $('#plugins-export-dropdown').removeClass('wt-open');
+                                exportPluginsCSV(exportType);
+                            });
+
+                            function exportPluginsCSV(type) {
+                                var rows = [];
+                                var now = new Date();
+                                var timestamp = now.getFullYear() + '-' +
+                                    ('0' + (now.getMonth() + 1)).slice(-2) + '-' +
+                                    ('0' + now.getDate()).slice(-2) + '-' +
+                                    ('0' + now.getHours()).slice(-2) + '-' +
+                                    ('0' + now.getMinutes()).slice(-2) + '-' +
+                                    ('0' + now.getSeconds()).slice(-2);
+
+                                $('.global-plugin-row').each(function() {
+                                    var plugin = $(this).data('plugin');
+                                    if (plugin && plugin.versions) {
+                                        var versions = Object.keys(plugin.versions);
+                                        versions.forEach(function(version) {
+                                            var info = plugin.versions[version];
+                                            info.sites.forEach(function(site) {
+                                                rows.push({
+                                                    plugin: plugin.name,
+                                                    version: version,
+                                                    site: site.name
+                                                });
+                                            });
+                                        });
+                                    }
+                                });
+
+                                var csv, filename;
+                                if (type === 'by-site') {
+                                    rows.sort(function(a, b) {
+                                        return a.site.localeCompare(b.site) ||
+                                               a.plugin.localeCompare(b.plugin) ||
+                                               a.version.localeCompare(b.version);
+                                    });
+                                    csv = 'site,plugin,version\n';
+                                    rows.forEach(function(row) {
+                                        csv += '"' + row.site.replace(/"/g, '""') + '","' +
+                                               row.plugin.replace(/"/g, '""') + '","' +
+                                               row.version.replace(/"/g, '""') + '"\n';
+                                    });
+                                    filename = 'plugins-by-site-' + timestamp + '.csv';
+                                } else {
+                                    rows.sort(function(a, b) {
+                                        return a.plugin.localeCompare(b.plugin) ||
+                                               a.version.localeCompare(b.version) ||
+                                               a.site.localeCompare(b.site);
+                                    });
+                                    csv = 'plugin,version,site\n';
+                                    rows.forEach(function(row) {
+                                        csv += '"' + row.plugin.replace(/"/g, '""') + '","' +
+                                               row.version.replace(/"/g, '""') + '","' +
+                                               row.site.replace(/"/g, '""') + '"\n';
+                                    });
+                                    filename = 'plugins-' + timestamp + '.csv';
+                                }
+
+                                var blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+                                var link = document.createElement('a');
+                                link.href = URL.createObjectURL(blob);
+                                link.download = filename;
+                                link.click();
+                            }
                         });
                         </script>
                     <?php endif; ?>
