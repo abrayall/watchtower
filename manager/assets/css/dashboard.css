@@ -629,6 +629,132 @@
     text-align: center;
 }
 
+.site-search-wrapper {
+    position: relative;
+    max-width: 300px;
+    margin-left: auto;
+    margin-bottom: 16px;
+}
+#site-search {
+    width: 100%;
+    padding: 8px 30px 8px 34px;
+    border: 1px solid #8c8f94;
+    border-radius: 4px;
+    font-size: 14px;
+    box-sizing: border-box;
+    background: #fff;
+}
+.site-search-clear {
+    position: absolute;
+    right: 8px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    color: #8c8f94;
+    cursor: pointer;
+    display: none;
+}
+.site-search-clear:hover {
+    color: #1d2327;
+}
+#site-search:focus {
+    border-color: #2271b1;
+    outline: none;
+    box-shadow: 0 0 0 1px #2271b1;
+}
+.site-search-icon {
+    position: absolute;
+    left: 10px;
+    top: 50%;
+    transform: translateY(-50%);
+    font-size: 16px;
+    width: 16px;
+    height: 16px;
+    color: #8c8f94;
+    pointer-events: none;
+}
+.search-autocomplete-dropdown {
+    position: absolute;
+    top: 100%;
+    left: 0;
+    right: 0;
+    background: #fff;
+    border: 1px solid #ccd0d4;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+    z-index: 1000;
+    max-height: 300px;
+    overflow-y: auto;
+}
+.search-autocomplete-item {
+    padding: 8px 12px;
+    cursor: pointer;
+    font-size: 13px;
+    color: #1d2327;
+}
+.search-autocomplete-item:hover,
+.search-autocomplete-item.active {
+    background: #f0f6fc;
+    color: #2271b1;
+}
+.sort-header {
+    text-decoration: none;
+    color: #1d2327;
+    cursor: pointer;
+    display: inline-flex;
+    align-items: center;
+    gap: 4px;
+}
+.sort-header:hover {
+    text-decoration: none;
+    color: #2271b1;
+}
+.sort-header:focus {
+    outline: none;
+    box-shadow: none;
+    text-decoration: none;
+}
+.sort-header .sort-indicator {
+    font-size: 14px;
+    width: 14px;
+    height: 14px;
+    opacity: 0.5;
+    position: relative;
+    top: -2px;
+}
+.sort-header.sort-active .sort-indicator {
+    opacity: 1;
+    color: #2271b1;
+}
+.tag-pill {
+    display: inline-block;
+    padding: 2px 8px;
+    margin: 1px 3px 1px 0;
+    font-size: 12px;
+    line-height: 18px;
+    border-radius: 10px;
+    background: #e7f1fd;
+    color: #2271b1;
+    white-space: nowrap;
+    text-decoration: none;
+}
+.tag-pill-filter {
+    cursor: pointer;
+}
+.tag-pill:hover {
+    background: #d4e6fa;
+    color: #2271b1;
+    text-decoration: none;
+}
+.tag-pill-more {
+    background: transparent;
+    color: #8c8f94;
+    padding: 2px 4px;
+}
+
 @media (min-width: 783px) {
     .watchtower-manager-dashboard .stats-grid {
         display: grid;
@@ -638,6 +764,12 @@
     }
     .watchtower-manager-dashboard .mobile-sites-grid {
         display: none;
+    }
+}
+
+@media (max-width: 782px) {
+    .site-search-wrapper {
+        max-width: 100%;
     }
 }
 

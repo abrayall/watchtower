@@ -55,6 +55,9 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_rename_file', array($this, 'ajax_rename_file'));
         add_action('wp_ajax_watchtower_manager_delete_file', array($this, 'ajax_delete_file'));
         add_action('wp_ajax_watchtower_manager_toggle_maintenance', array($this, 'ajax_toggle_maintenance'));
+        add_action('wp_ajax_watchtower_manager_get_tags', array($this, 'ajax_get_tags'));
+        add_action('wp_ajax_watchtower_manager_save_tags', array($this, 'ajax_save_tags'));
+        add_action('wp_ajax_watchtower_manager_get_all_tags', array($this, 'ajax_get_all_tags'));
     }
 
     /**
@@ -159,7 +162,8 @@ class Watchtower_Manager_Admin_Dashboard {
 
             wp_localize_script('watchtower-dashboard', 'context', array(
                 'ajaxurl' => admin_url('admin-ajax.php'),
-                'nonce' => wp_create_nonce('watchtower_manager_nonce')
+                'nonce' => wp_create_nonce('watchtower_manager_nonce'),
+                'searchTerms' => $this->get_search_terms()
             ));
         }
     }
@@ -175,12 +179,86 @@ class Watchtower_Manager_Admin_Dashboard {
         $healthy_count = 0;
         $unhealthy_count = 0;
         $agents_with_health = array();
+        $all_search_terms = array();
 
         foreach ($agents as $agent) {
             $health_data = $this->storage->get_health_data($agent['site']);
             $health_status = $this->determine_health_status($health_data);
 
             $agent['health_status'] = $health_status;
+
+            $search_parts = array();
+            $search_parts[] = isset($agent['name']) ? $agent['name'] : '';
+            $search_parts[] = $agent['site'];
+            $search_parts[] = isset($agent['username']) ? $agent['username'] : '';
+            $search_parts[] = isset($agent['wordpress_version']) ? $agent['wordpress_version'] : '';
+            $search_parts[] = isset($agent['php_version']) ? $agent['php_version'] : '';
+            $search_parts[] = isset($agent['agent_version']) ? $agent['agent_version'] : '';
+            $search_parts[] = $health_status;
+
+            $search_tags = array();
+            $search_plugins = array();
+            $search_users = array();
+            $search_theme = '';
+            $search_settings = array();
+
+            if (isset($agent['theme']['name'])) {
+                $search_parts[] = $agent['theme']['name'];
+                $search_theme = $agent['theme']['name'];
+                $all_search_terms[] = $agent['theme']['name'];
+            }
+
+            $tags = $this->storage->get_tags_data($agent['site']);
+            if (is_array($tags)) {
+                $search_parts = array_merge($search_parts, $tags);
+                $search_tags = $tags;
+                $all_search_terms = array_merge($all_search_terms, $tags);
+            }
+
+            $plugins_data = $this->storage->get_plugins_data($agent['site']);
+            if ($plugins_data && isset($plugins_data['plugins']) && is_array($plugins_data['plugins'])) {
+                foreach ($plugins_data['plugins'] as $plugin) {
+                    if (isset($plugin['name'])) {
+                        $search_parts[] = $plugin['name'];
+                        $search_plugins[] = $plugin['name'];
+                        $all_search_terms[] = $plugin['name'];
+                    }
+                }
+            }
+
+            $users_data = $this->storage->get_users_data($agent['site']);
+            if ($users_data && isset($users_data['users']) && is_array($users_data['users'])) {
+                foreach ($users_data['users'] as $user) {
+                    if (isset($user['username'])) {
+                        $search_parts[] = $user['username'];
+                        $search_users[] = $user['username'];
+                        $all_search_terms[] = $user['username'];
+                    }
+                }
+            }
+
+            if (isset($agent['constants']) && is_array($agent['constants'])) {
+                foreach ($agent['constants'] as $key => $value) {
+                    $search_parts[] = $key;
+                    $search_settings[] = $key;
+                }
+            }
+
+            if (isset($agent['name'])) {
+                $all_search_terms[] = $agent['name'];
+            }
+            $all_search_terms[] = $agent['site'];
+
+            $agent['_search_text'] = strtolower(implode(' ', array_filter($search_parts)));
+            $agent['_tags'] = $search_tags;
+            $agent['_search_tags'] = strtolower(implode('|', $search_tags));
+            $agent['_search_plugins'] = strtolower(implode('|', $search_plugins));
+            $agent['_search_users'] = strtolower(implode('|', $search_users));
+            $agent['_search_theme'] = strtolower($search_theme);
+            $agent['_search_settings'] = strtolower(implode('|', $search_settings));
+
+            $health_age = $this->storage->get_health_data_age($agent['site']);
+            $agent['_sort_scanned'] = $health_age !== null ? $health_age : 999999999;
             $agents_with_health[] = $agent;
 
             if ($health_status === 'healthy') {
@@ -189,6 +267,9 @@ class Watchtower_Manager_Admin_Dashboard {
                 $unhealthy_count++;
             }
         }
+
+        $all_search_terms = array_values(array_unique(array_filter($all_search_terms)));
+        sort($all_search_terms);
 
         usort($agents_with_health, function($a, $b) {
             $a_priority = ($a['health_status'] === 'warning' || $a['health_status'] === 'critical') ? 0 : 1;
@@ -277,6 +358,13 @@ class Watchtower_Manager_Admin_Dashboard {
                     </div>
                 </div>
 
+                <div class="site-search-wrapper">
+                    <span class="dashicons dashicons-search site-search-icon"></span>
+                    <input type="text" id="site-search" placeholder="Search sites..." autocomplete="off">
+                    <span class="dashicons dashicons-no-alt site-search-clear" id="site-search-clear"></span>
+                    <div id="search-autocomplete" class="search-autocomplete-dropdown" style="display: none;"></div>
+                </div>
+
                 <!-- Sites Table -->
                 <div class="sites-table">
                     <?php if (empty($agents)): ?>
@@ -290,12 +378,13 @@ class Watchtower_Manager_Admin_Dashboard {
                         <table>
                             <thead>
                                 <tr>
-                                    <th>Site</th>
-                                    <th>Health</th>
-                                    <th>WordPress</th>
-                                    <th>PHP</th>
-                                    <th>Agent</th>
-                                    <th>Scanned</th>
+                                    <th><a href="#" class="sort-header" data-sort="name">Site</a></th>
+                                    <th><a href="#" class="sort-header" data-sort="health">Health</a></th>
+                                    <th><a href="#" class="sort-header" data-sort="wordpress">WordPress</a></th>
+                                    <th><a href="#" class="sort-header" data-sort="php">PHP</a></th>
+                                    <th><a href="#" class="sort-header" data-sort="agent">Agent</a></th>
+                                    <th><a href="#" class="sort-header" data-sort="scanned">Scanned</a></th>
+                                    <th>Tags</th>
                                     <th style="text-align: right;">Actions</th>
                                 </tr>
                             </thead>
@@ -307,7 +396,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                         'site' => urlencode($agent['site'])
                                     ), admin_url('admin.php'));
                                     ?>
-                                    <tr data-site-index="<?php echo $index; ?>" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $agent['health_status']; ?>" class="clickable-row site-row">
+                                    <tr data-site-index="<?php echo $index; ?>" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $agent['health_status']; ?>" data-search-text="<?php echo esc_attr($agent['_search_text']); ?>" data-site-name="<?php echo esc_attr(strtolower($agent['name'] ?? $agent['site'])); ?>" data-site-url="<?php echo esc_attr(strtolower($agent['site'])); ?>" data-search-tags="<?php echo esc_attr($agent['_search_tags']); ?>" data-search-plugins="<?php echo esc_attr($agent['_search_plugins']); ?>" data-search-users="<?php echo esc_attr($agent['_search_users']); ?>" data-search-theme="<?php echo esc_attr($agent['_search_theme']); ?>" data-search-settings="<?php echo esc_attr($agent['_search_settings']); ?>" data-sort-name="<?php echo esc_attr(strtolower($agent['name'] ?? $agent['site'])); ?>" data-sort-health="<?php echo esc_attr($agent['health_status']); ?>" data-sort-wordpress="<?php echo esc_attr($agent['wordpress_version'] ?? ''); ?>" data-sort-php="<?php echo esc_attr($agent['php_version'] ?? ''); ?>" data-sort-agent="<?php echo esc_attr($agent['agent_version'] ?? ''); ?>" data-sort-scanned="<?php echo esc_attr($agent['_sort_scanned']); ?>" class="clickable-row site-row">
                                         <td>
                                             <div class="site-url">
                                                 <a href="<?php echo esc_url($agent['site']); ?>" target="_blank">
@@ -383,6 +472,26 @@ class Watchtower_Manager_Admin_Dashboard {
                                             }
                                             ?>
                                         </td>
+                                        <td data-label="Tags">
+                                            <?php
+                                            $tags = $agent['_tags'];
+                                            $show = 2;
+                                            $tags_url = esc_url(add_query_arg(array(
+                                                'page' => 'watchtower-manager-site-details',
+                                                'site' => urlencode($agent['site'])
+                                            ), admin_url('admin.php'))) . '#tags';
+                                            if (!empty($tags)) {
+                                                $visible = array_slice($tags, 0, $show);
+                                                $remaining = count($tags) - $show;
+                                                foreach ($visible as $tag) {
+                                                    echo '<span class="tag-pill tag-pill-filter" data-tag="' . esc_attr($tag) . '">' . esc_html($tag) . '</span>';
+                                                }
+                                                if ($remaining > 0) {
+                                                    echo '<a href="' . $tags_url . '" class="tag-pill tag-pill-more">+' . $remaining . '</a>';
+                                                }
+                                            }
+                                            ?>
+                                        </td>
                                         <td data-label="Actions" style="text-align: right;">
                                             <div class="actions">
                                                 <a href="<?php echo esc_url(add_query_arg(array(
@@ -433,7 +542,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             $health_status = $agent['health_status'];
                             $health_age = $this->storage->get_health_data_age($agent['site']);
                             ?>
-                            <div class="mobile-site-tile site-row" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $health_status; ?>" onclick="window.location.href='<?php echo esc_url($details_url); ?>'">
+                            <div class="mobile-site-tile site-row" data-details-url="<?php echo esc_url($details_url); ?>" data-health-status="<?php echo $health_status; ?>" data-search-text="<?php echo esc_attr($agent['_search_text']); ?>" data-site-name="<?php echo esc_attr(strtolower($agent['name'] ?? $agent['site'])); ?>" data-site-url="<?php echo esc_attr(strtolower($agent['site'])); ?>" data-search-tags="<?php echo esc_attr($agent['_search_tags']); ?>" data-search-plugins="<?php echo esc_attr($agent['_search_plugins']); ?>" data-search-users="<?php echo esc_attr($agent['_search_users']); ?>" data-search-theme="<?php echo esc_attr($agent['_search_theme']); ?>" data-search-settings="<?php echo esc_attr($agent['_search_settings']); ?>" onclick="window.location.href='<?php echo esc_url($details_url); ?>'">
                                 <div class="mobile-site-header">
                                     <div class="mobile-site-title">
                                         <a href="<?php echo esc_url($agent['site']); ?>" target="_blank" onclick="event.stopPropagation();">
@@ -2437,6 +2546,139 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_send_json_success($data);
     }
 
+    public function ajax_get_tags() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Site URL required'));
+            return;
+        }
+
+        $tags = $this->storage->get_tags_data($site_url);
+
+        if ($tags === null) {
+            $tags = array();
+        }
+
+        wp_send_json_success(array('tags' => $tags));
+    }
+
+    public function ajax_save_tags() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $site_url = isset($_POST['site']) ? sanitize_text_field($_POST['site']) : '';
+
+        if (empty($site_url)) {
+            wp_send_json_error(array('message' => 'Site URL required'));
+            return;
+        }
+
+        $tags = isset($_POST['tags']) ? $_POST['tags'] : array();
+
+        if (!is_array($tags)) {
+            $tags = array();
+        }
+
+        $tags = array_map('sanitize_text_field', $tags);
+        $tags = array_values(array_unique(array_filter($tags)));
+
+        $result = $this->storage->save_tags_data($site_url, $tags);
+
+        if ($result) {
+            wp_send_json_success(array('tags' => $tags));
+        } else {
+            wp_send_json_error(array('message' => 'Failed to save tags'));
+        }
+    }
+
+    private function get_search_terms() {
+        $agents = $this->storage->get_all_agents();
+        $all = array();
+        $names = array();
+        $urls = array();
+        $plugins = array();
+        $tags = array();
+        $users = array();
+        $themes = array();
+
+        foreach ($agents as $agent) {
+            if (isset($agent['name'])) {
+                $names[] = $agent['name'];
+                $all[] = $agent['name'];
+            }
+            $urls[] = $agent['site'];
+            $all[] = $agent['site'];
+
+            if (isset($agent['theme']['name'])) {
+                $themes[] = $agent['theme']['name'];
+                $all[] = $agent['theme']['name'];
+            }
+
+            $site_tags = $this->storage->get_tags_data($agent['site']);
+            if (is_array($site_tags)) {
+                $tags = array_merge($tags, $site_tags);
+                $all = array_merge($all, $site_tags);
+            }
+
+            $plugins_data = $this->storage->get_plugins_data($agent['site']);
+            if ($plugins_data && isset($plugins_data['plugins']) && is_array($plugins_data['plugins'])) {
+                foreach ($plugins_data['plugins'] as $plugin) {
+                    if (isset($plugin['name'])) {
+                        $plugins[] = $plugin['name'];
+                        $all[] = $plugin['name'];
+                    }
+                }
+            }
+
+            $users_data = $this->storage->get_users_data($agent['site']);
+            if ($users_data && isset($users_data['users']) && is_array($users_data['users'])) {
+                foreach ($users_data['users'] as $user) {
+                    if (isset($user['username'])) {
+                        $users[] = $user['username'];
+                        $all[] = $user['username'];
+                    }
+                }
+            }
+        }
+
+        $dedupe_sort = function($arr) {
+            $arr = array_values(array_unique(array_filter($arr)));
+            sort($arr);
+            return $arr;
+        };
+
+        return array(
+            'all' => $dedupe_sort($all),
+            'names' => $dedupe_sort($names),
+            'urls' => $dedupe_sort($urls),
+            'plugins' => $dedupe_sort($plugins),
+            'tags' => $dedupe_sort($tags),
+            'users' => $dedupe_sort($users),
+            'themes' => $dedupe_sort($themes),
+        );
+    }
+
+    public function ajax_get_all_tags() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $tags = $this->storage->get_all_tags();
+        wp_send_json_success(array('tags' => $tags));
+    }
+
     /**
      * Determine overall health status
      */
@@ -2691,6 +2933,7 @@ class Watchtower_Manager_Admin_Dashboard {
                     <option value="activity">Activity</option>
                     <option value="logs">Logs</option>
                     <option value="files">Files</option>
+                    <option value="tags">Tags</option>
                     <option value="actions">Actions</option>
                 </select>
             </div>
@@ -2718,6 +2961,9 @@ class Watchtower_Manager_Admin_Dashboard {
                     </button>
                     <button class="watchtower-tab-btn" data-tab="files">
                         <span class="dashicons dashicons-media-code"></span> Files
+                    </button>
+                    <button class="watchtower-tab-btn" data-tab="tags">
+                        <span class="dashicons dashicons-tag"></span> Tags
                     </button>
                     <button class="watchtower-tab-btn" data-tab="security">
                         <span class="dashicons dashicons-shield"></span> Security
@@ -3317,6 +3563,38 @@ class Watchtower_Manager_Admin_Dashboard {
                             <span class="dashicons dashicons-upload" style="margin-top: 3px;"></span> Update Agent
                         </button>
                     </p>
+                </div>
+            </div>
+
+            <!-- Tab Content: Tags -->
+            <div class="watchtower-tab-content" id="tab-tags" style="display: none;">
+                <div style="background: #fff; padding: 20px; border: 1px solid #ccd0d4; border-radius: 8px;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px; min-height: 40px;">
+                        <h2 style="margin: 0;">Tags</h2>
+                    </div>
+                    <div id="tags-loading" style="text-align: center; padding: 40px 20px;">
+                        <div class="watchtower-spinner"></div>
+                    </div>
+                    <div id="tags-error" style="display: none; text-align: center; padding: 40px 20px; color: #d63638;">
+                        <span class="dashicons dashicons-warning" style="font-size: 48px; width: 48px; height: 48px; margin-bottom: 10px;"></span>
+                        <p id="tags-error-message"></p>
+                    </div>
+                    <div id="tags-content" style="display: none;">
+                        <div style="display: flex; gap: 8px; margin-bottom: 20px; max-width: 400px;">
+                            <div class="tag-input-wrapper" style="flex: 1; position: relative;">
+                                <input type="text" id="tag-input" placeholder="Enter tag name..." style="width: 100%; height: 36px; padding: 0 12px; border: 1px solid #8c8f94; border-radius: 4px; box-sizing: border-box;">
+                                <div id="tag-autocomplete" class="tag-autocomplete-dropdown" style="display: none;"></div>
+                            </div>
+                            <button id="add-tag-btn" class="button button-primary" style="height: 36px; display: inline-flex; align-items: center; gap: 6px;">
+                                <span class="dashicons dashicons-plus-alt2" style="font-size: 16px; width: 16px; height: 16px;"></span> Add
+                            </button>
+                        </div>
+                        <div id="tags-container" style="display: flex; flex-wrap: wrap; gap: 8px;"></div>
+                        <div id="tags-empty" style="display: none; text-align: center; padding: 40px 20px; color: #646970;">
+                            <span class="dashicons dashicons-tag" style="font-size: 48px; width: 48px; height: 48px; color: #c3c4c7; margin-bottom: 10px;"></span>
+                            <p>No tags yet. Add tags to organize this site.</p>
+                        </div>
+                    </div>
                 </div>
             </div>
 

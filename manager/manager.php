@@ -70,6 +70,7 @@ function watchtower_manager_translate_agent_url($site_url, $endpoint) {
         $port_to_container = array(
             '8083' => 'watchtower_agent_site',
             '8082' => 'watchtower_manager_site',
+            '8085' => 'watchtower-agent-wordpress',
         );
 
         if (isset($port_to_container[$port])) {

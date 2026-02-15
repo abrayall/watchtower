@@ -194,6 +194,24 @@
     }
 
     jQuery(document).ready(function($) {
+        var referrer = document.referrer;
+        if (referrer) {
+            try {
+                var refUrl = new URL(referrer);
+                var search = refUrl.searchParams.get('search');
+                if (search) {
+                    $('.page-title-action').each(function() {
+                        var href = $(this).attr('href');
+                        if (href && href.indexOf('page=watchtower-manager') !== -1) {
+                            var backUrl = new URL(href, window.location.origin);
+                            backUrl.searchParams.set('search', search);
+                            $(this).attr('href', backUrl.toString());
+                        }
+                    });
+                }
+            } catch(e) {}
+        }
+
         $('.watchtower-update-agent-btn').on('click', function() {
             var button = $(this);
             var siteUrl = button.data('site');
@@ -340,6 +358,10 @@
             if (tab === 'files') {
                 loadFiles('/');
             }
+
+            if (tab === 'tags') {
+                loadTags();
+            }
         });
 
         $('#mobile-tab-selector').on('change', function() {
@@ -378,6 +400,10 @@
 
             if (tab === 'files') {
                 loadFiles('/');
+            }
+
+            if (tab === 'tags') {
+                loadTags();
             }
         });
 
@@ -1483,7 +1509,7 @@
 
         if (window.location.hash) {
             var hash = window.location.hash.substring(1);
-            var validTabs = ['overview', 'plugins', 'users', 'activity', 'logs', 'files', 'actions', 'backups'];
+            var validTabs = ['overview', 'plugins', 'users', 'activity', 'logs', 'files', 'tags', 'actions', 'backups'];
 
             if (validTabs.indexOf(hash) !== -1) {
                 $('.watchtower-tab-btn').removeClass('active');
@@ -1526,8 +1552,221 @@
                         loadBackups();
                     }, 100);
                 }
+
+                if (hash === 'tags') {
+                    setTimeout(function() {
+                        loadTags();
+                    }, 100);
+                }
             }
         }
+
+        var currentTagsList = [];
+
+        function loadTags() {
+            $('#tags-loading').show();
+            $('#tags-content').hide();
+            $('#tags-error').hide();
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_get_tags',
+                site: context.siteUrl,
+                nonce: context.nonce
+            }, function(response) {
+                $('#tags-loading').hide();
+
+                if (response.success) {
+                    currentTagsList = response.data.tags || [];
+                    renderTags();
+                    $('#tags-content').show();
+                } else {
+                    $('#tags-error-message').text(response.data?.message || 'Failed to load tags');
+                    $('#tags-error').show();
+                }
+            }).fail(function() {
+                $('#tags-loading').hide();
+                $('#tags-error-message').text('Network error');
+                $('#tags-error').show();
+            });
+        }
+
+        function renderTags() {
+            var container = $('#tags-container');
+            container.empty();
+
+            if (currentTagsList.length === 0) {
+                $('#tags-empty').show();
+                container.hide();
+            } else {
+                $('#tags-empty').hide();
+                container.show();
+
+                currentTagsList.forEach(function(tag) {
+                    var chip = $('<span class="tag-chip"></span>').text(tag);
+                    var removeBtn = $('<button class="remove-tag" data-tag="' + $('<div>').text(tag).html() + '">&times;</button>');
+                    chip.append(removeBtn);
+                    container.append(chip);
+                });
+            }
+        }
+
+        function saveTags(tags) {
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_save_tags',
+                site: context.siteUrl,
+                nonce: context.nonce,
+                tags: tags
+            }, function(response) {
+                if (response.success) {
+                    currentTagsList = response.data.tags || [];
+                    renderTags();
+                }
+            });
+        }
+
+        function addTag() {
+            var input = $('#tag-input');
+            var tag = input.val().trim().toLowerCase();
+
+            if (!tag) return;
+
+            if (currentTagsList.indexOf(tag) !== -1) {
+                input.val('');
+                return;
+            }
+
+            currentTagsList.push(tag);
+            renderTags();
+            saveTags(currentTagsList);
+            input.val('').focus();
+        }
+
+        $('#add-tag-btn').on('click', function() {
+            addTag();
+        });
+
+        $('#tag-input').on('keypress', function(e) {
+            if (e.which === 13) {
+                e.preventDefault();
+                addTag();
+            }
+        });
+
+        $(document).on('click', '.remove-tag', function() {
+            var tag = $(this).data('tag');
+            currentTagsList = currentTagsList.filter(function(t) { return t !== tag; });
+            renderTags();
+            saveTags(currentTagsList);
+        });
+
+        var allTagsCache = null;
+        var tagAutoIndex = -1;
+
+        function fetchAllTags(callback) {
+            if (allTagsCache !== null) {
+                callback(allTagsCache);
+                return;
+            }
+
+            $.post(context.ajaxurl, {
+                action: 'watchtower_manager_get_all_tags',
+                nonce: context.nonce
+            }, function(response) {
+                if (response.success) {
+                    allTagsCache = response.data.tags || [];
+                } else {
+                    allTagsCache = [];
+                }
+                callback(allTagsCache);
+            }).fail(function() {
+                allTagsCache = [];
+                callback(allTagsCache);
+            });
+        }
+
+        $('#tag-input').on('input', function() {
+            var query = $(this).val().trim().toLowerCase();
+            var $dropdown = $('#tag-autocomplete');
+            tagAutoIndex = -1;
+
+            if (!query) {
+                $dropdown.hide();
+                return;
+            }
+
+            fetchAllTags(function(allTags) {
+                var matches = [];
+                for (var i = 0; i < allTags.length; i++) {
+                    var tag = allTags[i];
+                    if (tag.toLowerCase().indexOf(query) !== -1 && currentTagsList.indexOf(tag) === -1) {
+                        var priority = tag.toLowerCase().indexOf(query) === 0 ? 0 : 1;
+                        matches.push({ tag: tag, priority: priority });
+                    }
+                }
+
+                matches.sort(function(a, b) {
+                    if (a.priority !== b.priority) return a.priority - b.priority;
+                    return a.tag.localeCompare(b.tag);
+                });
+
+                matches = matches.slice(0, 8);
+
+                if (matches.length === 0) {
+                    $dropdown.hide();
+                    return;
+                }
+
+                $dropdown.empty();
+                matches.forEach(function(m) {
+                    $dropdown.append('<div class="tag-autocomplete-item">' + $('<span>').text(m.tag).html() + '</div>');
+                });
+                $dropdown.show();
+            });
+        });
+
+        $('#tag-input').on('keydown', function(e) {
+            var $dropdown = $('#tag-autocomplete');
+            var $items = $dropdown.find('.tag-autocomplete-item');
+
+            if (!$dropdown.is(':visible') || $items.length === 0) return;
+
+            if (e.key === 'ArrowDown') {
+                e.preventDefault();
+                tagAutoIndex = Math.min(tagAutoIndex + 1, $items.length - 1);
+                $items.removeClass('active');
+                $items.eq(tagAutoIndex).addClass('active');
+            } else if (e.key === 'ArrowUp') {
+                e.preventDefault();
+                tagAutoIndex = Math.max(tagAutoIndex - 1, 0);
+                $items.removeClass('active');
+                $items.eq(tagAutoIndex).addClass('active');
+            } else if (e.key === 'Enter' && tagAutoIndex >= 0) {
+                e.preventDefault();
+                var selected = $items.eq(tagAutoIndex).text();
+                $('#tag-input').val(selected);
+                $dropdown.hide();
+                tagAutoIndex = -1;
+                addTag();
+            } else if (e.key === 'Escape') {
+                $dropdown.hide();
+                tagAutoIndex = -1;
+            }
+        });
+
+        $('#tag-input').on('blur', function() {
+            setTimeout(function() {
+                $('#tag-autocomplete').hide();
+                tagAutoIndex = -1;
+            }, 200);
+        });
+
+        $(document).on('click', '.tag-autocomplete-item', function() {
+            var tag = $(this).text();
+            $('#tag-input').val(tag);
+            $('#tag-autocomplete').hide();
+            tagAutoIndex = -1;
+            addTag();
+        });
 
         var currentFilePath = '/';
 

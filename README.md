@@ -18,6 +18,13 @@ Central management plugin that provides a dashboard to monitor and manage multip
 - **Maintenance mode toggle** - Enable/disable maintenance mode on remote sites
 - **Backup management** - View, create, and restore backups with background processing
 - **User management** - View and manage administrator users across sites
+- **Site tagging** - Organize sites with custom tags, with autocomplete suggestions from tags used across all sites
+- **Site search** - Search and filter sites by name, URL, plugins, tags, users, themes, or settings
+  - Category-scoped search with prefix syntax (e.g., `plugins:Yoast`, `tags:production`)
+  - Negation support to exclude matches (e.g., `!Updraft`, `plugins:!WooCommerce`)
+  - Autocomplete suggestions scoped to the active search category
+  - Bookmarkable search URLs with `?search=` parameter
+- **Sortable columns** - Click table headers to sort by any column, with ascending/descending toggle
 - **Agent auto-update** - Automatically update agents during health scans
 - Configurable health polling interval (default: 15 minutes)
 - Multisite support with subdirectory installations
@@ -82,7 +89,8 @@ wp-content/watchtower-manager/
         ├── health.json               # Latest health metrics (CPU, memory, disk)
         ├── plugins.json              # Plugin inventory
         ├── backups.json              # Backup list
-        └── users.json                # Administrator users
+        ├── users.json                # Administrator users
+        └── tags.json                 # User-assigned site tags
 ```
 
 ### Agent Plugin Structure

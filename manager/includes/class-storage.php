@@ -285,6 +285,7 @@ class Watchtower_Manager_Storage {
         if ($agent_host === 'localhost' && $agent_port !== 80 && $agent_port !== 443) {
             $port_to_container = array(
                 '8083' => 'watchtower_agent_site',
+                '8085' => 'watchtower-agent-wordpress',
             );
 
             if (isset($port_to_container[$agent_port])) {
@@ -336,6 +337,25 @@ class Watchtower_Manager_Storage {
                 'error' => 'Invalid response from agent',
             );
             return $this->save_health_data($site_url, $health_data);
+        }
+
+        if (isset($health_data['wordpress']['site'])) {
+            $expected_host = strtolower(parse_url($site_url, PHP_URL_HOST) ?: '');
+            $actual_host = strtolower(parse_url($health_data['wordpress']['site'], PHP_URL_HOST) ?: '');
+
+            $known_containers = array(
+                'watchtower_agent_site',
+                'watchtower-agent-wordpress',
+            );
+            $is_container = in_array($expected_host, $known_containers);
+
+            if ($expected_host && $actual_host && $expected_host !== $actual_host && !$is_container) {
+                $health_data = array(
+                    'success' => false,
+                    'error' => 'Response from unexpected host: ' . $actual_host,
+                );
+                return $this->save_health_data($site_url, $health_data);
+            }
         }
 
         $current_agent = $this->get_agent_by_url($site_url);
@@ -641,6 +661,55 @@ class Watchtower_Manager_Storage {
         return $plugins_data;
     }
 
+    public function save_tags_data($site_url, $tags_data) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'tags.json';
+
+        if (!file_exists($site_dir)) {
+            wp_mkdir_p($site_dir);
+        }
+
+        $json = json_encode($tags_data, JSON_PRETTY_PRINT);
+        $result = file_put_contents($file_path, $json);
+
+        return $result !== false;
+    }
+
+    public function get_all_tags() {
+        $agents = $this->get_all_agents();
+        $all_tags = array();
+
+        foreach ($agents as $agent) {
+            $tags = $this->get_tags_data($agent['site']);
+            if (is_array($tags)) {
+                $all_tags = array_merge($all_tags, $tags);
+            }
+        }
+
+        $all_tags = array_values(array_unique($all_tags));
+        sort($all_tags);
+
+        return $all_tags;
+    }
+
+    public function get_tags_data($site_url) {
+        $site_dir = $this->get_site_dir($site_url);
+        $file_path = $site_dir . 'tags.json';
+
+        if (!file_exists($file_path)) {
+            return null;
+        }
+
+        $json = file_get_contents($file_path);
+        $tags_data = json_decode($json, true);
+
+        if (!is_array($tags_data)) {
+            return null;
+        }
+
+        return $tags_data;
+    }
+
     /**
      * Check and update agent version if needed
      *
@@ -667,6 +736,7 @@ class Watchtower_Manager_Storage {
         if ($agent_host === 'localhost' && $agent_port !== 80 && $agent_port !== 443) {
             $port_to_container = array(
                 '8083' => 'watchtower_agent_site',
+                '8085' => 'watchtower-agent-wordpress',
             );
 
             if (isset($port_to_container[$agent_port])) {
