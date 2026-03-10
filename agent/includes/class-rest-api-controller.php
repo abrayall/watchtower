@@ -91,7 +91,8 @@ class Watchtower_Agent_REST_Controller {
             'home_url' => get_home_url(),
             'name' => get_bloginfo('name'),
             'icon' => $site_icon_url ? $site_icon_url : null,
-            'admin_url' => get_admin_url(),
+            'admin_url' => $this->detect_admin_url(),
+            'login_url' => $this->detect_login_url(),
             'admin_email' => get_option('admin_email'),
             'language' => get_locale(),
             'timezone' => get_option('timezone_string') ?: 'UTC',
@@ -220,7 +221,8 @@ class Watchtower_Agent_REST_Controller {
             'home_url' => get_home_url(),
             'name' => get_bloginfo('name'),
             'icon' => $site_icon_url ? $site_icon_url : null,
-            'admin_url' => admin_url(),
+            'admin_url' => $this->detect_admin_url(),
+            'login_url' => $this->detect_login_url(),
             'admin_email' => get_option('admin_email'),
             'language' => get_locale(),
             'timezone' => get_option('timezone_string') ?: 'UTC',
@@ -355,9 +357,35 @@ class Watchtower_Agent_REST_Controller {
         ), 200);
     }
 
-    /**
-     * Convert PHP size format to bytes
-     */
+    private function detect_admin_url() {
+        $hmwp_options = get_option('hmwp_options');
+        if ($hmwp_options) {
+            $options = is_array($hmwp_options) ? $hmwp_options : json_decode($hmwp_options, true);
+            if ($options && !empty($options['hmwp_admin_url']) && $options['hmwp_admin_url'] !== 'wp-admin') {
+                return trailingslashit(site_url($options['hmwp_admin_url']));
+            }
+        }
+
+        return get_admin_url();
+    }
+
+    private function detect_login_url() {
+        $whl_page = get_option('whl_page');
+        if ($whl_page && $whl_page !== 'login') {
+            return site_url($whl_page);
+        }
+
+        $hmwp_options = get_option('hmwp_options');
+        if ($hmwp_options) {
+            $options = is_array($hmwp_options) ? $hmwp_options : json_decode($hmwp_options, true);
+            if ($options && !empty($options['hmwp_login_url']) && $options['hmwp_login_url'] !== 'wp-login.php') {
+                return site_url($options['hmwp_login_url']);
+            }
+        }
+
+        return wp_login_url();
+    }
+
     private function convert_to_bytes($size) {
         $size = trim($size);
         $last = strtolower($size[strlen($size) - 1]);
@@ -381,6 +409,10 @@ class Watchtower_Agent_REST_Controller {
 
         $all_plugins = get_plugins();
         $active_plugins = get_option('active_plugins', array());
+        $network_plugins = array();
+        if (is_multisite()) {
+            $network_plugins = get_site_option('active_sitewide_plugins', array());
+        }
         $update_plugins = get_site_transient('update_plugins');
 
         $plugins = array();
@@ -391,7 +423,7 @@ class Watchtower_Agent_REST_Controller {
                 $slug = basename($plugin_file, '.php');
             }
 
-            $is_active = in_array($plugin_file, $active_plugins);
+            $is_active = in_array($plugin_file, $active_plugins) || isset($network_plugins[$plugin_file]);
 
             $update_info = null;
             $update_available = false;
@@ -442,7 +474,7 @@ class Watchtower_Agent_REST_Controller {
 
         return array(
             'total_count' => count($all_plugins),
-            'active_count' => count($active_plugins),
+            'active_count' => count(array_filter($plugins, function($p) { return $p['active']; })),
             'update_count' => ($update_plugins && isset($update_plugins->response)) ? count($update_plugins->response) : 0,
             'plugins' => $plugins,
         );

@@ -58,6 +58,8 @@ class Watchtower_Manager_Admin_Dashboard {
         add_action('wp_ajax_watchtower_manager_get_tags', array($this, 'ajax_get_tags'));
         add_action('wp_ajax_watchtower_manager_save_tags', array($this, 'ajax_save_tags'));
         add_action('wp_ajax_watchtower_manager_get_all_tags', array($this, 'ajax_get_all_tags'));
+        add_action('wp_ajax_watchtower_manager_get_plugin_catalog', array($this, 'ajax_get_plugin_catalog'));
+        add_action('wp_ajax_watchtower_manager_save_plugin_catalog', array($this, 'ajax_save_plugin_catalog'));
     }
 
     /**
@@ -123,6 +125,14 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_enqueue_script('jquery-ui-datepicker');
         wp_enqueue_style('jquery-ui-css', 'https://code.jquery.com/ui/1.13.2/themes/base/jquery-ui.min.css');
 
+        wp_enqueue_script(
+            'watchtower-plugin-dialog',
+            plugins_url('assets/js/plugin-dialog.js', dirname(__FILE__)),
+            array('jquery'),
+            WATCHTOWER_MANAGER_VERSION . '-' . time(),
+            true
+        );
+
         if (isset($_GET['site'])) {
             wp_enqueue_style(
                 'watchtower-details',
@@ -134,7 +144,7 @@ class Watchtower_Manager_Admin_Dashboard {
             wp_enqueue_script(
                 'watchtower-details',
                 plugins_url('assets/js/details.js', dirname(__FILE__)),
-                array('jquery', 'jquery-ui-datepicker'),
+                array('jquery', 'jquery-ui-datepicker', 'watchtower-plugin-dialog'),
                 WATCHTOWER_MANAGER_VERSION . '-' . time(),
                 true
             );
@@ -455,16 +465,22 @@ class Watchtower_Manager_Admin_Dashboard {
                                                 </span>
                                             <?php endif; ?>
                                         </td>
-                                        <td data-label="WordPress">
+                                        <td data-label="WordPress" class="truncate-cell" title="<?php echo esc_attr($agent['wordpress_version']); ?>">
                                             <span class="badge badge-success">
                                                 <?php echo esc_html($agent['wordpress_version']); ?>
                                             </span>
                                         </td>
-                                        <td data-label="PHP"><?php echo esc_html($agent['php_version']); ?></td>
-                                        <td data-label="Agent"><?php echo esc_html($agent['agent_version']); ?></td>
-                                        <td data-label="Scanned">
-                                            <?php
+                                        <td data-label="PHP" class="truncate-cell" title="<?php echo esc_attr($agent['php_version']); ?>"><?php echo esc_html($agent['php_version']); ?></td>
+                                        <td data-label="Agent" class="truncate-cell" title="<?php echo esc_attr($agent['agent_version']); ?>"><?php echo esc_html($agent['agent_version']); ?></td>
+                                        <td data-label="Scanned" class="truncate-cell" title="<?php
                                             $health_age = $this->storage->get_health_data_age($agent['site']);
+                                            if ($health_age !== null) {
+                                                echo $health_age < 60 ? 'just now' : esc_attr(human_time_diff(current_time('timestamp') - $health_age, current_time('timestamp')) . ' ago');
+                                            } else {
+                                                echo 'Never';
+                                            }
+                                        ?>">
+                                            <?php
                                             if ($health_age !== null) {
                                                 echo $health_age < 60 ? 'just now' : human_time_diff(current_time('timestamp') - $health_age, current_time('timestamp')) . ' ago';
                                             } else {
@@ -501,7 +517,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                                    class="button button-small button-primary">
                                                     Details
                                                 </a>
-                                                <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
+                                                <a href="<?php echo esc_url($agent['login_url'] ?? $agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
                                                    class="button button-small"
                                                    target="_blank">
                                                     WordPress
@@ -605,7 +621,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                     </div>
                                 </div>
                                 <div class="mobile-site-actions">
-                                    <a href="<?php echo esc_url($agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
+                                    <a href="<?php echo esc_url($agent['login_url'] ?? $agent['admin_url'] ?? ($agent['site'] . '/wp-admin')); ?>"
                                        class="button button-small"
                                        target="_blank"
                                        onclick="event.stopPropagation();">
@@ -933,7 +949,7 @@ class Watchtower_Manager_Admin_Dashboard {
                         </table>
 
                         <div id="global-plugin-details-dialog" class="watchtower-dialog-overlay" style="display: none;">
-                            <div class="watchtower-dialog" style="max-width: 700px; width: 90%;">
+                            <div class="watchtower-dialog" style="max-width: 700px;">
                                 <div class="watchtower-dialog-header">
                                     <span class="dashicons dashicons-admin-plugins watchtower-dialog-icon prompt"></span>
                                     <h3 class="watchtower-dialog-title" id="global-plugin-dialog-title" style="flex: 1;">Plugin Details</h3>
@@ -983,36 +999,12 @@ class Watchtower_Manager_Admin_Dashboard {
 
                         jQuery(document).ready(function($) {
                             function showGlobalPluginDetails(plugin) {
-                                var html = '<div style="line-height: 1.8;">';
-
-                                html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px; margin-bottom: 20px;">';
-                                html += '<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600; width: 120px;">Slug</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1;"><code>' + plugin.slug + '</code></td></tr>';
-                                if (plugin.author) {
-                                    html += '<tr><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600;">Author</td><td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1;">' + plugin.author + '</td></tr>';
-                                }
-                                html += '</table>';
-
-                                html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
-                                html += '<thead><tr><th style="padding: 8px 0; border-bottom: 1px solid #ccd0d4; text-align: left; font-weight: 600; color: #1d2327; background: none;">Site</th><th style="padding: 8px 0; border-bottom: 1px solid #ccd0d4; text-align: left; font-weight: 600; color: #1d2327; background: none;">Version</th></tr></thead>';
-                                html += '<tbody>';
-                                var versions = Object.keys(plugin.versions).sort().reverse();
-                                versions.forEach(function(version) {
-                                    var info = plugin.versions[version];
-                                    info.sites.forEach(function(site) {
-                                        var updateTag = site.update_available ? '<span style="background: #fcf0e3; color: #996800; padding: 1px 6px; border-radius: 3px; font-size: 10px; font-weight: 600; margin-left: 8px;">update</span>' : '';
-                                        html += '<tr>';
-                                        html += '<td style="padding: 10px 0; border-bottom: 1px solid #f0f0f1;"><a href="admin.php?page=watchtower-manager-site-details&site=' + encodeURIComponent(site.url) + '">' + site.name + '</a></td>';
-                                        html += '<td style="padding: 10px 0; border-bottom: 1px solid #f0f0f1;">' + version + updateTag + '</td>';
-                                        html += '</tr>';
-                                    });
+                                WatchtowerPluginDialog.show(plugin, {
+                                    dialogId: 'global-plugin-details-dialog',
+                                    ajaxurl: context.ajaxurl,
+                                    nonce: context.nonce,
+                                    showSites: true
                                 });
-                                html += '</tbody></table>';
-
-                                html += '</div>';
-
-                                $('#global-plugin-dialog-title').text(plugin.name);
-                                $('#global-plugin-dialog-body').html(html);
-                                $('#global-plugin-details-dialog').show();
                             }
 
                             $(document).on('click', '.global-plugin-row', function(e) {
@@ -2679,6 +2671,72 @@ class Watchtower_Manager_Admin_Dashboard {
         wp_send_json_success(array('tags' => $tags));
     }
 
+    public function ajax_get_plugin_catalog() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $slug = isset($_POST['slug']) ? sanitize_text_field($_POST['slug']) : '';
+
+        if (empty($slug)) {
+            wp_send_json_error(array('message' => 'Plugin slug required'));
+            return;
+        }
+
+        $catalog = new Watchtower_Plugin_Catalog();
+        $data = $catalog->get_display_data($slug);
+
+        if (!$data) {
+            wp_send_json_success(array('catalog' => null));
+            return;
+        }
+
+        wp_send_json_success(array('catalog' => $data));
+    }
+
+    public function ajax_save_plugin_catalog() {
+        check_ajax_referer('watchtower_manager_nonce', 'nonce');
+
+        if (!current_user_can('manage_options')) {
+            wp_send_json_error(array('message' => 'Permission denied'));
+        }
+
+        $slug = isset($_POST['slug']) ? sanitize_text_field($_POST['slug']) : '';
+
+        if (empty($slug)) {
+            wp_send_json_error(array('message' => 'Plugin slug required'));
+            return;
+        }
+
+        $properties = array();
+        $fields = array('vendor', 'tags', 'license', 'cost', 'category', 'notes');
+        foreach ($fields as $field) {
+            if (isset($_POST[$field])) {
+                $properties[$field] = sanitize_text_field($_POST[$field]);
+            }
+        }
+
+        $licenses_raw = isset($_POST['licenses']) ? wp_unslash($_POST['licenses']) : null;
+        if ($licenses_raw !== null) {
+            $licenses = json_decode($licenses_raw, true);
+            if (is_array($licenses)) {
+                $properties['licenses'] = $licenses;
+            }
+        }
+
+        $catalog = new Watchtower_Plugin_Catalog();
+        $result = $catalog->update_properties($slug, $properties);
+
+        if (!$result) {
+            wp_send_json_error(array('message' => 'Plugin not found in catalog'));
+            return;
+        }
+
+        wp_send_json_success(array('catalog' => $catalog->get_display_data($slug)));
+    }
+
     /**
      * Determine overall health status
      */
@@ -2905,7 +2963,7 @@ class Watchtower_Manager_Admin_Dashboard {
                                 <span class="dashicons dashicons-admin-site"></span>
                                 Visit Site
                             </a>
-                            <a href="<?php echo esc_url($agent['admin_url'] ?? ($site_url . '/wp-admin')); ?>" target="_blank" class="health-status-btn">
+                            <a href="<?php echo esc_url($agent['login_url'] ?? $agent['admin_url'] ?? ($site_url . '/wp-admin')); ?>" target="_blank" class="health-status-btn">
                                 <span class="dashicons dashicons-admin-generic"></span>
                                 WP Admin
                             </a>
@@ -2916,7 +2974,7 @@ class Watchtower_Manager_Admin_Dashboard {
                             <span class="dashicons dashicons-admin-site"></span>
                             Visit Site
                         </a>
-                        <a href="<?php echo esc_url($agent['admin_url'] ?? ($site_url . '/wp-admin')); ?>" target="_blank" class="health-status-btn">
+                        <a href="<?php echo esc_url($agent['login_url'] ?? $agent['admin_url'] ?? ($site_url . '/wp-admin')); ?>" target="_blank" class="health-status-btn">
                             <span class="dashicons dashicons-admin-generic"></span>
                             WP Admin
                         </a>
@@ -3197,7 +3255,7 @@ class Watchtower_Manager_Admin_Dashboard {
                     </table>
 
                     <div id="plugin-details-dialog" class="watchtower-dialog-overlay" style="display: none;">
-                        <div class="watchtower-dialog" style="max-width: 600px;">
+                        <div class="watchtower-dialog" style="max-width: 700px;">
                             <div class="watchtower-dialog-header">
                                 <span class="dashicons dashicons-admin-plugins watchtower-dialog-icon prompt"></span>
                                 <h3 class="watchtower-dialog-title" id="plugin-dialog-title" style="flex: 1;">Plugin Details</h3>

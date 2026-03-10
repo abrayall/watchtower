@@ -2318,55 +2318,12 @@
         });
 
         function showPluginDetails(plugin) {
-            var statusBadge = plugin.active
-                ? '<span style="background: #d5f3e5; color: #00a32a; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600;">Active</span>'
-                : '<span style="background: #f0f0f1; color: #646970; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600;">Inactive</span>';
-
-            var updateBadge = plugin.update_available
-                ? '<span style="background: #fcf0e3; color: #996800; padding: 4px 10px; border-radius: 3px; font-size: 11px; font-weight: 600; margin-left: 6px;">Update Available</span>'
-                : '';
-
-            $('#plugin-dialog-title').html('<span style="display: flex; justify-content: space-between; align-items: center; width: 100%;"><span>' + plugin.name + '</span><span>' + statusBadge + updateBadge + '</span></span>');
-
-            var html = '<div style="line-height: 1.8;">';
-            html += '<table style="width: 100%; border-collapse: collapse; font-size: 13px;">';
-
-            var rows = [
-                ['Slug', '<code>' + (plugin.slug || '-') + '</code>'],
-                ['Version', plugin.version || '-'],
-                ['Author', plugin.author || '-'],
-                ['Requires WordPress', plugin.requires_wp || '-'],
-                ['Requires PHP', plugin.requires_php || '-']
-            ];
-
-            if (plugin.plugin_uri) {
-                rows.push(['Plugin URL', '<a href="' + plugin.plugin_uri + '" target="_blank">' + plugin.plugin_uri + '</a>']);
-            }
-
-            if (plugin.wp_org && plugin.wp_org.url) {
-                rows.push(['WordPress.org', '<a href="' + plugin.wp_org.url + '" target="_blank">View on WordPress.org</a>']);
-            }
-
-            rows.forEach(function(row) {
-                html += '<tr>';
-                html += '<td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; font-weight: 600; width: 140px; color: #1d2327;">' + row[0] + '</td>';
-                html += '<td style="padding: 8px 0; border-bottom: 1px solid #f0f0f1; color: #50575e;">' + row[1] + '</td>';
-                html += '</tr>';
+            WatchtowerPluginDialog.show(plugin, {
+                dialogId: 'plugin-details-dialog',
+                ajaxurl: context.ajaxurl,
+                nonce: context.nonce,
+                showSites: false
             });
-
-            html += '</table>';
-
-            if (plugin.description) {
-                html += '<div style="margin-top: 15px; padding-top: 15px; border-top: 1px solid #ccd0d4;">';
-                html += '<strong style="display: block; margin-bottom: 8px;">Description</strong>';
-                html += '<div style="color: #50575e; font-size: 13px;">' + plugin.description + '</div>';
-                html += '</div>';
-            }
-
-            html += '</div>';
-
-            $('#plugin-dialog-body').html(html);
-            $('#plugin-details-dialog').show();
         }
 
         $(document).on('click', '.plugin-details-btn', function(e) {

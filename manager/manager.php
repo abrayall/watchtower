@@ -88,6 +88,7 @@ require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-watchtower-manager.
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-rest-api-controller.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-storage.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-auto-updater.php';
+require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-plugin-catalog.php';
 require_once WATCHTOWER_MANAGER_PLUGIN_DIR . 'includes/class-admin-dashboard.php';
 
 function watchtower_manager_init() {
@@ -193,6 +194,9 @@ function watchtower_manager_activate() {
         wp_schedule_event(time(), 'daily', 'watchtower_manager_check_versions');
         error_log('Watchtower Manager: Daily version check cron job scheduled');
     }
+
+    $catalog = new Watchtower_Plugin_Catalog();
+    $catalog->create_table();
 
     $previous_version = get_option('watchtower_manager_version');
     $current_version = WATCHTOWER_MANAGER_VERSION;

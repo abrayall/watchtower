@@ -378,6 +378,9 @@ class Watchtower_Manager_Storage {
             if (isset($static_data['wordpress']['admin_url'])) {
                 $update_data['admin_url'] = $static_data['wordpress']['admin_url'];
             }
+            if (isset($static_data['wordpress']['login_url'])) {
+                $update_data['login_url'] = $static_data['wordpress']['login_url'];
+            }
             if (isset($static_data['wordpress']['icon'])) {
                 $update_data['icon'] = $static_data['wordpress']['icon'];
             }
@@ -466,6 +469,13 @@ class Watchtower_Manager_Storage {
             $plugins_data = $static_data['plugins'];
             $plugins_data['fetched_at'] = current_time('mysql');
             $this->save_plugins_data($site_url, $plugins_data);
+
+            if (isset($plugins_data['plugins']) && is_array($plugins_data['plugins'])) {
+                $catalog = new Watchtower_Plugin_Catalog();
+                foreach ($plugins_data['plugins'] as $plugin) {
+                    $catalog->populate_from_agent_data($plugin);
+                }
+            }
         }
 
         return $this->save_health_data($site_url, $dynamic_data);

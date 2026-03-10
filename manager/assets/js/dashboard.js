@@ -404,6 +404,16 @@
                 e.stopPropagation();
                 var tag = $(this).data('tag');
                 var query = 'tags:' + tag;
+                var current = $('#site-search').val().trim();
+                if (current === query) {
+                    $('#site-search').val('');
+                    $('#site-search-clear').hide();
+                    searchSites('');
+                    var url = new URL(window.location);
+                    url.searchParams.delete('search');
+                    window.history.replaceState({}, '', url);
+                    return;
+                }
                 $('#site-search').val(query);
                 $('#site-search-clear').show();
                 searchSites(query);

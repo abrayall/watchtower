@@ -509,11 +509,18 @@
     background: #f0f0f1;
     color: #646970;
 }
+.truncate-cell {
+    max-width: 100px;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
 .watchtower-manager-dashboard .actions {
     display: flex;
     gap: 8px;
-    flex-wrap: wrap;
+    flex-wrap: nowrap;
     justify-content: flex-end;
+    white-space: nowrap;
 }
 .watchtower-manager-dashboard .button-small {
     padding: 4px 8px;
